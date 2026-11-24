@@ -183,4 +183,21 @@ float TextTop(float centreY) {
     return std::round(centreY - mid);
 }
 
+// Ellipsis cuts text to fit a width, ending in "…".
+std::string Ellipsis(const std::string& s, float width) {
+    if (ImGui::CalcTextSize(s.c_str()).x <= width) return s;
+    const char* dots = "\xE2\x80\xA6";
+    float dw = ImGui::CalcTextSize(dots).x;
+    size_t lo = 0, hi = s.size();
+    while (lo < hi) {
+        size_t mid = (lo + hi + 1) / 2;
+        while (mid > 0 && (s[mid] & 0xC0) == 0x80) mid--;  // whole characters
+        if (mid <= lo) break;
+        if (ImGui::CalcTextSize(s.c_str(), s.c_str() + mid).x + dw <= width) lo = mid;
+        else hi = mid - 1;
+    }
+    while (lo > 0 && (s[lo] & 0xC0) == 0x80) lo--;
+    return s.substr(0, lo) + dots;
+}
+
 }  // namespace shelf

@@ -1,6 +1,8 @@
 // Colours, fonts and ImGui style: kiln's dark purple look.
 #pragma once
 
+#include <string>
+
 #include "imgui.h"
 
 namespace shelf {
@@ -56,6 +58,10 @@ inline constexpr const char* Down = "\xEE\x9C\x8D";  // U+E70D
 inline constexpr const char* UpArrow = "\xEE\x9C\x8E";  // U+E70E
 inline constexpr const char* Dismiss = "\xEE\x9C\x91";  // U+E711
 inline constexpr const char* Link = "\xEE\x9C\x9B";  // U+E71B
+inline constexpr const char* Sizes = "\xEE\xAC\x85";  // U+EB05 PieSingle
+inline constexpr const char* ChevronRight = "\xEE\xA5\xB0";  // U+E970 ChevronRightSmall
+inline constexpr const char* ChevronDown = "\xEE\xA5\xAE";  // U+E96E ChevronDownSmall
+inline constexpr const char* Files = "\xEE\x9F\x83";  // U+E7C3 Page
 }  // namespace icon
 
 void ApplyTheme(float scale);
@@ -72,6 +78,8 @@ ImVec4 InkBounds(const char* s);
 // DrawCentred draws a string (an icon, usually) with its ink centred on
 // a point, whatever the font's line box does.
 void DrawCentred(ImDrawList* dl, ImVec2 centre, const char* s, ImU32 col);
+// Ellipsis cuts text to fit a width (at the current font), ending in "…".
+std::string Ellipsis(const std::string& s, float width);
 // TextTop gives the y to draw text at so its capitals centre on centreY.
 float TextTop(float centreY);
 ImVec4 Hex(unsigned rgb, float a = 1.0f);

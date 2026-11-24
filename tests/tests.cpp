@@ -5,6 +5,10 @@
 #include <vector>
 
 #include "paths.h"
+#ifdef _WIN32
+#include <fstream>
+#include "sizes.h"
+#endif
 
 using namespace shelf;
 
@@ -220,6 +224,58 @@ static void testUses() {
     CHECK(v.size() == 1);
 }
 
+#ifdef _WIN32
+static void writeFile(const std::wstring& path, size_t bytes) {
+    std::ofstream f(path, std::ios::binary);
+    std::string data(bytes, 'x');
+    f.write(data.data(), std::streamsize(data.size()));
+}
+
+// testSizes scans a small tree in %TEMP%: a\ (100 + 50 bytes), a\b\ (1000),
+// c\ (empty) and a 7-byte file at the top.
+static void testSizes() {
+    wchar_t tmp[MAX_PATH];
+    GetTempPathW(MAX_PATH, tmp);
+    std::wstring root = std::wstring(tmp) + L"shelf-sizes-test";
+    CreateDirectoryW(root.c_str(), nullptr);
+    CreateDirectoryW((root + L"\\a").c_str(), nullptr);
+    CreateDirectoryW((root + L"\\a\\b").c_str(), nullptr);
+    CreateDirectoryW((root + L"\\c").c_str(), nullptr);
+    writeFile(root + L"\\top.txt", 7);
+    writeFile(root + L"\\a\\one", 100);
+    writeFile(root + L"\\a\\two", 50);
+    writeFile(root + L"\\a\\b\\big", 1000);
+    HANDLE done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    {
+        SizeScan scan(root, [done] { SetEvent(done); }, 3);
+        CHECK(WaitForSingleObject(done, 10000) == WAIT_OBJECT_0);
+        CHECK(scan.Done());
+        SizeNode* top = scan.Top();
+        CHECK(top->bytes == 1157 && top->files == 4 && top->folders == 3);
+        CHECK(top->ownBytes == 7 && top->ownFiles == 1);
+        auto kids = SortedKids(top);
+        CHECK(kids.size() == 2 && kids[0]->name == L"a" && kids[1]->name == L"c");
+        CHECK(kids[0]->bytes == 1150 && kids[0]->folders == 1 && kids[1]->bytes == 0);
+        SizeNode* b = scan.Find(root + L"\\A\\b");
+        CHECK(b && b->bytes == 1000 && scan.PathOf(b) == root + L"\\a\\b");
+        CHECK(scan.Find(root) == top && !scan.Find(root + L"\\nope") && !scan.Find(root + L"x"));
+        CHECK(scan.Covers(root + L"\\a") && !scan.Covers(root + L"-other"));
+        scan.Removed(b);
+        CHECK(top->bytes == 157 && kids[0]->bytes == 150 && top->folders == 2 && !scan.Find(root + L"\\a\\b"));
+        CHECK(scan.Unreadable() == 0);
+    }
+    CloseHandle(done);
+    // A root that isn't there: done at once, one unreadable folder.
+    done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    {
+        SizeScan scan(root + L"\\missing", [done] { SetEvent(done); });
+        CHECK(WaitForSingleObject(done, 10000) == WAIT_OBJECT_0);
+        CHECK(scan.Unreadable() == 1 && scan.Top()->bytes == 0);
+    }
+    CloseHandle(done);
+}
+#endif
+
 int main() {
     testNatural();
     testOrder();
@@ -230,6 +286,9 @@ int main() {
     testFormat();
     testKinds();
     testUses();
+#ifdef _WIN32
+    testSizes();
+#endif
     testMediaHeavy();
     if (failures) {
         std::printf("%d failed\n", failures);

@@ -19,6 +19,19 @@ Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
   the default WSL distro's home (`/root`; other distros are left out, and
   `/` is one step up the path bar). It's read from the registry, so a
   stopped distro isn't started until you click it.
+- **Sizes** (Ctrl+3, or "Show sizes" on a drive's right-click menu on This
+  PC): what's taking the space under the folder, like TreeSize. A scan
+  runs in the background (4 threads, below normal priority; C: with 1.5M
+  files takes about 50 s) and the tree fills in as it goes: folders
+  biggest first, each with its share of the folder above, files and
+  folders counted; a folder's own files show as one "N files" row.
+  Arrows or the chevrons open folders, double-click or Enter goes in
+  (the scan is kept, so going deeper is instant), Del recycles a scanned
+  folder (it comes off the totals), F5 or Rescan starts again.
+  Junctions and symlinks aren't followed; OneDrive's online-only files
+  count as nothing. Folders it can't read (other users', System Volume
+  Information) are marked; on a drive's root it says how much of the
+  used space it couldn't find.
 - **Thumbnails or details** (Ctrl+1 / Ctrl+2), chosen per folder: a
   folder that's mostly pictures and videos (at least 3 and half its files,
   or 20 or more) opens as thumbnails, anything else as details. A view

@@ -17,6 +17,7 @@
 
 #include "fs.h"
 #include "paths.h"
+#include "sizes.h"
 #include "theme.h"
 #include "thumbs.h"
 
@@ -32,7 +33,7 @@ public:
     // (drags, the shell's menu); call every loop, outside a frame.
     void Pump();
     // Busy asks for a frame a second (loading, a message to clear).
-    bool Busy() const { return loading_ || !message_.empty(); }
+    bool Busy() const { return loading_ || !message_.empty() || (sizesView_ && scan_ && !scan_->Done()); }
 
     // InCaption says whether a point (client pixels) drags the window.
     bool InCaption(float x, float y) const;
@@ -52,6 +53,7 @@ public:
 
     // For test runs and screenshots.
     void SetView(bool thumbs);
+    void SetSizes() { sizesView_ = true; }
     void SetSort(SortKey key, bool descending);
     void SelectName(const std::wstring& name);
 
@@ -104,6 +106,14 @@ private:
     bool sideItem(const char* icon, const std::string& label, const std::wstring& path, const char* sub = nullptr,
                   float fill = -1, bool warn = false, bool isHome = false);
     void drawHome();
+    // The sizes view (sizeview.cpp): the folder's tree by size.
+    void drawSizes();
+    void sizesStatus(float x, float y);
+    void startScan();
+    void sizesMenu(SizeNode* n);
+    void recycleNode(SizeNode* n, bool permanently);
+    void recheckRemovals();
+    void sizesKeys();
     void drawGrid();
     void drawDetails();
     void drawStatus();
@@ -202,6 +212,19 @@ private:
     // Folders by use, for This PC's links under each drive. A visit counts
     // once you've stayed 2 s, so folders passed through on the way don't.
     std::vector<Use> uses_;
+    // Sizes.
+    bool sizesView_ = false;
+    std::unique_ptr<SizeScan> scan_;
+    std::unordered_set<const SizeNode*> sizesOpen_;  // expanded folders
+    SizeNode* sizesSel_ = nullptr;
+    SizeNode* sizesMenuNode_ = nullptr;
+    struct Removal {
+        SizeNode* node;
+        std::wstring path;
+    };
+    std::vector<Removal> removals_;  // recycled from the view; checked once it's done
+    std::vector<SizeNode*> sizesRows_;  // the visible rows, last frame (for keys)
+
     std::wstring homeSel_;                  // what's selected on This PC
     std::vector<std::wstring> hiddenUses_;  // hidden from those links by hand
     ULONGLONG arrivedAt_ = 0;

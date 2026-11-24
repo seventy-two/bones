@@ -5,7 +5,7 @@
 //   shelf.exe -bench <dir> <out>    times thumbnails for a folder, no window
 //
 // Test runs: SHELF_DATA (state and cache elsewhere; runs beside the real
-// one), SHELF_POS=x,y,w,h, SHELF_VIEW=thumbs|details,
+// one), SHELF_POS=x,y,w,h, SHELF_VIEW=thumbs|details|sizes,
 // SHELF_SORT=name|modified|created|type|size[-desc], SHELF_SELECT=<name>.
 #include <windows.h>
 #include <d3d11.h>
@@ -319,7 +319,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
     app = std::make_unique<shelf::App>(hwnd, device, [] { PostMessageW(hwnd, WM_APP_WAKE, 0, 0); });
     app->SetScale(ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd));
-    if (std::wstring v = env(L"SHELF_VIEW"); !v.empty()) app->SetView(v == L"thumbs");
+    if (std::wstring v = env(L"SHELF_VIEW"); v == L"sizes") app->SetSizes();
+    else if (!v.empty()) app->SetView(v == L"thumbs");
     if (std::wstring v = env(L"SHELF_SORT"); !v.empty()) {
         bool desc = v.size() > 5 && v.substr(v.size() - 5) == L"-desc";
         if (desc) v = v.substr(0, v.size() - 5);

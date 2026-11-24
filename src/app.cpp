@@ -55,22 +55,7 @@ const char* driveIcon(UINT type) {
     }
 }
 
-// ellipsis cuts text to fit a width, ending in "…".
-std::string ellipsis(const std::string& s, float width) {
-    if (ImGui::CalcTextSize(s.c_str()).x <= width) return s;
-    const char* dots = "\xE2\x80\xA6";
-    float dw = ImGui::CalcTextSize(dots).x;
-    size_t lo = 0, hi = s.size();
-    while (lo < hi) {
-        size_t mid = (lo + hi + 1) / 2;
-        while (mid > 0 && (s[mid] & 0xC0) == 0x80) mid--;  // whole characters
-        if (mid <= lo) break;
-        if (ImGui::CalcTextSize(s.c_str(), s.c_str() + mid).x + dw <= width) lo = mid;
-        else hi = mid - 1;
-    }
-    while (lo > 0 && (s[lo] & 0xC0) == 0x80) lo--;
-    return s.substr(0, lo) + dots;
-}
+std::string ellipsis(const std::string& s, float width) { return Ellipsis(s, width); }
 
 // splitTwo splits a name over at most two lines of a width, breaking
 // after a space, dot, dash or underscore where it can; the second line
@@ -138,6 +123,7 @@ void App::SetView(bool thumbs) {
 }
 
 void App::setView(bool thumbs, bool manual) {
+    if (manual) sizesView_ = false;
     if (!thumbs && thumbView_) sortApplied_ = false;
     thumbView_ = thumbs;
     if (!manual || cur_.empty()) return;
@@ -266,6 +252,8 @@ void App::go(std::wstring path, bool record, std::wstring focus, float scroll) {
     }
     cur_ = path;
     homeSel_.clear();
+    sizesSel_ = nullptr;
+    if (cur_.empty()) sizesView_ = false;  // This PC has no sizes view
     arriveFocus_ = std::move(focus);
     arriveScroll_ = scroll;
     filter_[0] = 0;
@@ -495,7 +483,10 @@ void App::Pump() {
     }
     for (auto& l : got)
         if (l.gen == gen_ && SamePath(l.dir, cur_)) took(std::move(l));
-    if (shared_->dirty.exchange(false) && !loading_) list(true);
+    if (shared_->dirty.exchange(false)) {
+        if (!loading_) list(true);
+        recheckRemovals();
+    }
     thumbs_->Pump();
 
     // Things with modal loops of their own run here, between frames.
@@ -737,6 +728,7 @@ void App::Frame() {
 
     ImGui::BeginChild("body", ImVec2(0, bodyH), 0, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     if (cur_.empty()) drawHome();
+    else if (sizesView_) drawSizes();
     else {
         if (thumbView_) drawGrid();
         else drawDetails();
@@ -828,11 +820,11 @@ void App::drawToolbar() {
     // From the right: window buttons, view, size, sort, filter.
     float right = origin.x + W - windowButtons();
     float gap = 8 * s;
-    float viewW = ctrl * 2 + 6 * s, sliderW = 96 * s, sortW = 150 * s, filterW = 220 * s;
+    float viewW = ctrl * 3 + 6 * s, sliderW = 96 * s, sortW = 150 * s, filterW = 220 * s;
     float rx = right - 10 * s - viewW;
     float viewX = rx;
     float sliderX = 0, sortX = 0;
-    bool tiles = thumbView_ && !cur_.empty();
+    bool tiles = thumbView_ && !sizesView_ && !cur_.empty();
     if (tiles) {
         rx -= gap + sliderW;
         sliderX = rx;
@@ -854,7 +846,7 @@ void App::drawToolbar() {
             ImGui::SetKeyboardFocusHere();
             focusFilter_ = false;
         }
-        ImGui::BeginDisabled(cur_.empty());
+        ImGui::BeginDisabled(cur_.empty() || sizesView_);
         bool typed = ImGui::InputTextWithHint("##filter", "Filter", filter_, sizeof filter_);
         ImGui::EndDisabled();
         if (typed) {
@@ -919,12 +911,17 @@ void App::drawToolbar() {
 
     // View: one box, the chosen half lit.
     dl->AddRectFilled(ImVec2(viewX, y0), ImVec2(viewX + viewW, y0 + ctrl), U32(p.surface2), 7 * s);
-    float inset = 3 * s, half = (viewW - inset * 2) / 2;
-    ImVec2 hs(half, ctrl - inset * 2);
-    if (iconButton("##thumbs", icon::Grid, "Thumbnails (Ctrl+1)", true, ImVec2(viewX + inset, y0 + inset), hs, thumbView_))
+    float inset = 3 * s, third = (viewW - inset * 2) / 3;
+    ImVec2 hs(third, ctrl - inset * 2);
+    if (iconButton("##thumbs", icon::Grid, "Thumbnails (Ctrl+1)", true, ImVec2(viewX + inset, y0 + inset), hs,
+                   thumbView_ && !sizesView_))
         setView(true, true);
-    if (iconButton("##details", icon::List, "Details (Ctrl+2)", true, ImVec2(viewX + inset + half, y0 + inset), hs, !thumbView_))
+    if (iconButton("##details", icon::List, "Details (Ctrl+2)", true, ImVec2(viewX + inset + third, y0 + inset), hs,
+                   !thumbView_ && !sizesView_))
         setView(false, true);
+    if (iconButton("##sizes", icon::Sizes, "Sizes (Ctrl+3)", !cur_.empty(), ImVec2(viewX + inset + third * 2, y0 + inset), hs,
+                   sizesView_))
+        sizesView_ = true;
 
     dl->AddLine(ImVec2(origin.x, origin.y + captionH_ - 0.5f), ImVec2(origin.x + W, origin.y + captionH_ - 0.5f), U32(p.border));
     ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + captionH_));
@@ -1427,6 +1424,10 @@ void App::drawHome() {
         if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##drivemenu");
         if (ImGui::BeginPopup("##drivemenu")) {
             if (ImGui::MenuItem("Open")) Navigate(d.root);
+            if (ImGui::MenuItem("Show sizes")) {
+                Navigate(d.root);
+                sizesView_ = true;
+            }
             if (ImGui::MenuItem("Pin to sidebar", nullptr, false, !pinned(d.root))) pin(d.root);
             if (ImGui::MenuItem("Properties")) Properties(hwnd_, {d.root});
             unhideItem(d.root);
@@ -1935,6 +1936,12 @@ void App::drawStatus() {
         ImGui::Dummy(ImVec2(w, h));
         return;
     }
+    if (sizesView_) {
+        sizesStatus(a.x + 12 * s, y);
+        ImGui::PopFont();
+        ImGui::Dummy(ImVec2(w, h));
+        return;
+    }
     size_t total = 0;
     for (auto& e : entries_)
         if (!hidden(e)) total++;
@@ -2088,6 +2095,11 @@ void App::keys() {
     int n = int(view_.size());
     bool ctrl = io.KeyCtrl, shift = io.KeyShift, alt = io.KeyAlt;
     if (pressed(ImGuiKey_Backspace)) up();
+    if (ctrl && pressed(ImGuiKey_3) && !cur_.empty()) sizesView_ = !sizesView_;
+    if (sizesView_ && !cur_.empty()) {
+        sizesKeys();
+        return;
+    }
     if (cur_.empty()) {  // This PC: Enter opens what's selected there
         if (!homeSel_.empty() && (pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter))) Navigate(homeSel_);
         return;
