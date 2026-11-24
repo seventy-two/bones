@@ -1118,7 +1118,6 @@ bool App::sideItem(const char* icon, const std::string& label, const std::wstrin
     ImDrawList* dl = ImGui::GetWindowDrawList();
     if (here || hovered)
         dl->AddRectFilled(a, ImVec2(a.x + w, a.y + h), U32(here ? p.accentLo : p.surface2), 6 * s);
-    if (here) dl->AddRectFilled(ImVec2(a.x, a.y + 6 * s), ImVec2(a.x + 3 * s, a.y + h - 6 * s), U32(p.accent), 2 * s);
     float x = a.x + 12 * s;
     float lineMid = sub ? a.y + 6 * s + lineH / 2 : a.y + h / 2;
     DrawCentred(dl, ImVec2(x + 8 * s, lineMid), icon, U32(here ? p.accent : p.muted));
