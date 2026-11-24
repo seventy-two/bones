@@ -1,17 +1,18 @@
 # shelf
 
-A plain file browser for Windows: drives, pinned folders and WSL distros
+A plain file browser for Windows: drives, pinned folders and your WSL home
 down the side, and a folder as thumbnails or as details. None of
 Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
 
 - **This PC** is where it opens (unless given a folder): a card for each
-  drive with its free space, and each WSL distro's root and home. It's at
+  drive with its free space, and the default WSL distro's home. It's at
   the top of the sidebar, the first step of the path bar, and Up from a
   drive.
 - **Sidebar**: pinned folders (+ pins where you are, drag to reorder,
   right-click to move or unpin), every drive with its free space, and
-  each WSL distro with its root and home (read from the registry, so a
-  stopped distro isn't started until you click it).
+  the default WSL distro's home (`/root`; other distros are left out, and
+  `/` is one step up the path bar). It's read from the registry, so a
+  stopped distro isn't started until you click it.
 - **Thumbnails or details** (Ctrl+1 / Ctrl+2), chosen per folder: a
   folder that's mostly pictures and videos (at least 3 and half its files,
   or 20 or more) opens as thumbnails, anything else as details. A view
