@@ -4,6 +4,7 @@
 //   bones.exe [folder]              opens there (else where it was left)
 //   bones.exe -bench <dir> <out>    times thumbnails for a folder, no window
 //
+// Screenshots: BONES_DEMO=M:\ shows made-up drives (scripts\demo.ps1).
 // Test runs: BONES_DATA (state and cache elsewhere; runs beside the real
 // one), BONES_POS=x,y,w,h, BONES_VIEW=thumbs|details|sizes,
 // BONES_SORT=name|modified|created|type|size[-desc], BONES_SELECT=<name>.

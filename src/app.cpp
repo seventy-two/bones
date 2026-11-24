@@ -466,8 +466,10 @@ void App::focusOn(int vi, bool extend) {
 }
 
 void App::DrivesChanged() {
-    std::thread([shared = shared_, wake = wake_] {
-        auto drives = ListDrives();
+    const wchar_t* demo = _wgetenv(L"BONES_DEMO");
+    std::wstring media = demo ? demo : L"";
+    std::thread([shared = shared_, wake = wake_, media] {
+        auto drives = media.empty() ? ListDrives() : DemoDrives(media);
         {
             std::lock_guard<std::mutex> lock(shared->mu);
             shared->drives = std::move(drives);
@@ -1180,6 +1182,10 @@ void App::drawSidebar() {
         const char* ic = icon::Folder;
         for (auto& k : KnownPlaces())
             if (SamePath(k.path, pins_[i].path)) ic = k.icon;
+        // A pin named like a known place gets its icon too (demo pins, moved folders).
+        if (ic == icon::Folder)
+            for (auto& k : KnownPlaces())
+                if (k.label == pins_[i].label) ic = k.icon;
         if (IsLinux(pins_[i].path)) ic = icon::Linux;
         if (sideItem(ic, pins_[i].label, pins_[i].path)) Navigate(pins_[i].path);
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("%s", Narrow(pins_[i].path).c_str());

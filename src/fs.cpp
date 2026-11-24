@@ -178,6 +178,40 @@ bool ListDir(const std::wstring& dir, std::vector<Entry>& out, DWORD& error) {
     return true;
 }
 
+namespace {
+uint64_t folderBytes(const std::wstring& dir) {
+    uint64_t total = 0;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileExW((dir + L"\\*").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, 0);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        std::wstring n = fd.cFileName;
+        if (n == L"." || n == L"..") continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) total += folderBytes(dir + L"\\" + n);
+        } else {
+            total += (uint64_t(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
+        }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return total;
+}
+}  // namespace
+
+std::vector<Drive> DemoDrives(const std::wstring& media) {
+    const uint64_t GB = 1000ull * 1000 * 1000;
+    std::wstring root = media;
+    if (root.size() == 2) root += L"\\";
+    uint64_t used = folderBytes(root.substr(0, root.size() - 1));
+    std::string letter = Narrow(root.substr(0, 2));
+    return {
+        {L"C:\\", "Windows (C:)", DRIVE_FIXED, 1000 * GB, 412 * GB},
+        {L"G:\\", "Games (G:)", DRIVE_FIXED, 2000 * GB, 644 * GB},
+        {root, "Media (" + letter + ")", DRIVE_FIXED, 4000 * GB, 4000 * GB - std::min(used, 4000 * GB)},
+        {L"U:\\", "USB stick (U:)", DRIVE_REMOVABLE, 64 * GB, 41 * GB},
+    };
+}
+
 std::vector<Drive> ListDrives() {
     std::vector<Drive> out;
     DWORD oldMode = 0;

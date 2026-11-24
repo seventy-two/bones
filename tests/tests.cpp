@@ -109,8 +109,8 @@ static void testPaths() {
     CHECK(Normalise(L"c:") == L"C:\\");
     // What CommandLineToArgvW makes of "C:\" from the folder open verb.
     CHECK(Normalise(L"C:\"") == L"C:\\");
-    CHECK(Normalise(L"C:/Users/seven/") == L"C:\\Users\\seven");
-    CHECK(Normalise(L"\"C:\\Users\\seven\"") == L"C:\\Users\\seven");
+    CHECK(Normalise(L"C:/Users/me/") == L"C:\\Users\\me");
+    CHECK(Normalise(L"\"C:\\Users\\me\"") == L"C:\\Users\\me");
     CHECK(Normalise(L"\\\\wsl$\\Debian\\root") == L"\\\\wsl.localhost\\Debian\\root");
     CHECK(Normalise(L"\\\\wsl.localhost\\Debian") == L"\\\\wsl.localhost\\Debian\\");
     CHECK(Normalise(L"C:\\a\\\\b") == L"C:\\a\\b");
@@ -121,7 +121,7 @@ static void testPaths() {
     CHECK(IsRoot(L"\\\\nas\\media\\"));
     CHECK(!IsRoot(L"C:\\Users"));
 
-    CHECK(Parent(L"C:\\Users\\seven") == L"C:\\Users");
+    CHECK(Parent(L"C:\\Users\\me") == L"C:\\Users");
     CHECK(Parent(L"C:\\Users") == L"C:\\");
     CHECK(Parent(L"C:\\") == L"");
     CHECK(Parent(L"\\\\wsl.localhost\\Debian\\root") == L"\\\\wsl.localhost\\Debian\\");
@@ -146,10 +146,10 @@ static void testPaths() {
 }
 
 static void testCrumbs() {
-    auto c = Crumbs(L"C:\\Users\\seven");
+    auto c = Crumbs(L"C:\\Users\\me");
     CHECK(c.size() == 3);
     CHECK(c[0].label == L"C:" && c[0].path == L"C:\\");
-    CHECK(c[2].label == L"seven" && c[2].path == L"C:\\Users\\seven");
+    CHECK(c[2].label == L"me" && c[2].path == L"C:\\Users\\me");
     c = Crumbs(L"\\\\wsl.localhost\\Debian\\root\\go");
     CHECK(c.size() == 3);
     CHECK(c[0].label == L"Debian" && c[0].path == L"\\\\wsl.localhost\\Debian\\");

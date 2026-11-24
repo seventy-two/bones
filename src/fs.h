@@ -41,6 +41,10 @@ struct Drive {
 // empty DVD drive, a dropped network drive) can take a while, so call it
 // off the window's thread.
 std::vector<Drive> ListDrives();
+// DemoDrives is a made-up set of drives for screenshots (BONES_DEMO):
+// Windows, Games, a USB stick, and media, the real folder the mock data
+// is in (a subst drive, "M:\"), its used space what's really in it.
+std::vector<Drive> DemoDrives(const std::wstring& media);
 
 struct Distro {
     std::wstring name;

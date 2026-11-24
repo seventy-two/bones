@@ -1,8 +1,19 @@
 # bones
 
 A plain file browser for Windows: drives, pinned folders and your WSL home
-down the side, and a folder as thumbnails or as details. None of
+down the side, and a folder as thumbnails, details or sizes. None of
 Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
+
+![This PC: drives with their most used folders](docs/home.png)
+
+![Thumbnails](docs/thumbs.png)
+
+![Sizes: what's taking the space](docs/sizes.png)
+
+![Details](docs/details.png)
+
+(The screenshots are of made-up drives and files: see
+[Screenshots](#screenshots).)
 
 - **This PC** is where it opens (unless given a folder): a list of the
   drives with their free space and the default WSL distro's home, each
@@ -91,6 +102,18 @@ bones and Win+Shift+E to Explorer.
 Windows still uses Explorer for "Show in folder" (apps call
 `SHOpenFolderAndSelectItems`), the Open/Save dialogs, the desktop and the
 taskbar.
+
+## Screenshots
+
+The README's screenshots come from mock data, not anyone's real files:
+`scripts/make-demo.py <dir>\media` (Python with Pillow, and ffmpeg) draws
+landscape photos and short clips and lists the big files (films, games,
+backups); `scripts\demo.ps1 -Dir <dir> [-Open M:\Photos] [-View
+thumbs|details|sizes] [-Sort size-desc]` makes those as sparse files
+(their full size, about 1 TB, but no disk space), maps the folder to `M:`
+with `subst`, writes pins and most used folders to a state of its own,
+and starts bones with `BONES_DEMO`, which swaps in made-up drives. Run
+`subst M: /d` afterwards.
 
 ## Building
 
