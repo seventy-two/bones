@@ -105,7 +105,9 @@ App::App(HWND hwnd, ID3D11Device* device, std::function<void()> wake)
     fonts_ = LoadFonts();
     thumbs_ = std::make_unique<Thumbs>(device_, wake_);
     icons_ = std::make_unique<Icons>(device_);
+    // Only the default distro: others (e.g. an old test one) are clutter.
     distros_ = ListDistros();
+    if (distros_.size() > 1) distros_.resize(1);
     load();
     DrivesChanged();
 }
@@ -1210,13 +1212,10 @@ void App::drawSidebar() {
         for (size_t i = 0; i < distros_.size(); i++) {
             const Distro& d = distros_[i];
             ImGui::PushID(int(200 + i));
-            std::wstring root = FromLinux(L"/", d.name);
-            if (sideItem(icon::Linux, Narrow(d.name), root)) Navigate(root);
+            // Just the home folder: / is a click up the breadcrumbs.
             std::wstring homeGuess = d.uid == 0 ? FromLinux(L"/root", d.name) : L"";
-            std::string homeLabel = Narrow(d.name) + (d.uid == 0 ? "  /root" : "  home");
-            ImGui::PushID("home");
+            std::string homeLabel = d.uid == 0 ? "/root" : "Home";
             if (sideItem(icon::Home, homeLabel, homeGuess)) Navigate(DistroHome(d));
-            ImGui::PopID();
             ImGui::PopID();
         }
     }
@@ -1331,10 +1330,8 @@ void App::drawHome() {
         for (size_t i = 0; i < distros_.size(); i++) {
             const Distro& d = distros_[i];
             ImGui::PushID(int(100 + i));
-            std::string name = Narrow(d.name) + (d.isDefault ? "  (default)" : "");
-            if (card(k++, "##root", icon::Linux, name, "/", -1, false)) Navigate(FromLinux(L"/", d.name));
             std::string home = d.uid == 0 ? "/root" : "your home";
-            if (card(k++, "##home", icon::Home, Narrow(d.name) + " home", home, -1, false)) Navigate(DistroHome(d));
+            if (card(k++, "##home", icon::Home, Narrow(d.name), home, -1, false)) Navigate(DistroHome(d));
             ImGui::PopID();
         }
         sectionEnd(k);
@@ -1802,7 +1799,7 @@ void App::drawStatus() {
     if (cur_.empty()) {
         snprintf(buf, sizeof buf, "%zu drive%s", drives_.size(), drives_.size() == 1 ? "" : "s");
         std::string left = buf;
-        if (!distros_.empty()) left += "   \xC2\xB7   " + std::to_string(distros_.size()) + " Linux distro" + (distros_.size() == 1 ? "" : "s");
+        if (!distros_.empty()) left += "   \xC2\xB7   " + Narrow(distros_[0].name);
         dl->AddText(ImVec2(a.x + 12 * s, y), U32(p.muted), left.c_str());
         ImGui::PopFont();
         ImGui::Dummy(ImVec2(w, h));
