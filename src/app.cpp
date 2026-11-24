@@ -1255,20 +1255,23 @@ void App::drawHome() {
     float s = scale_;
     ImGui::BeginChild("home", ImVec2(0, 0), 0);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    float pad = 28 * s, gap = 14 * s;
+    float pad = 24 * s, gap = 10 * s;
     float avail = ImGui::GetContentRegionAvail().x - pad * 2;
-    int cols = std::max(1, int((avail + gap) / (290 * s + gap)));
-    float cardW = std::min((avail - gap * (cols - 1)) / cols, 420 * s), cardH = std::round(78 * s);
+    int cols = std::max(1, int((avail + gap) / (300 * s + gap)));
+    float cardW = std::min((avail - gap * (cols - 1)) / cols, 380 * s), cardH = std::round(50 * s);
     ImVec2 origin = ImGui::GetCursorScreenPos();
     float y = origin.y + pad;
 
     auto heading = [&](const char* text) {
-        ImGui::PushFont(fonts_.semibold, kTitle);
-        dl->AddText(ImVec2(origin.x + pad, y), U32(p.text), text);
-        y += ImGui::GetTextLineHeight() + 12 * s;
+        ImGui::PushFont(fonts_.semibold, 0);
+        dl->AddText(ImVec2(origin.x + pad, y), U32(p.muted), text);
+        y += ImGui::GetTextLineHeight() + 8 * s;
         ImGui::PopFont();
     };
-    // card draws one, at index k of its section; true when clicked.
+    // card draws one compact row-card, at index k of its section; true
+    // when clicked. With a fill (a drive), the name and free space share
+    // the top line and a thin bar sits under them; without, the sub line
+    // goes under the name.
     auto card = [&](int k, const char* id, const char* glyph, const std::string& label, const std::string& sub, float fill,
                     bool warn) {
         float x = origin.x + pad + (k % cols) * (cardW + gap);
@@ -1277,29 +1280,37 @@ void App::drawHome() {
         bool hit = ImGui::InvisibleButton(id, ImVec2(cardW, cardH));
         bool hov = ImGui::IsItemHovered();
         ImVec2 a(x, cy), b(x + cardW, cy + cardH);
-        dl->AddRectFilled(a, b, U32(hov ? p.surface2 : p.surface), 10 * s);
-        dl->AddRect(a, b, U32(hov ? p.accent : p.border, hov ? 0.6f : 1.0f), 10 * s);
-        ImGui::PushFont(nullptr, 30);
-        DrawCentred(dl, ImVec2(x + 40 * s, cy + cardH / 2), glyph, U32(hov ? p.accent : p.muted));
+        dl->AddRectFilled(a, b, U32(hov ? p.surface2 : p.surface), 7 * s);
+        dl->AddRect(a, b, U32(hov ? p.accent : p.border, hov ? 0.6f : 1.0f), 7 * s);
+        ImGui::PushFont(nullptr, 20);
+        DrawCentred(dl, ImVec2(x + 24 * s, cy + cardH / 2), glyph, U32(hov ? p.accent : p.muted));
         ImGui::PopFont();
-        float tx = x + 76 * s, tw = cardW - 76 * s - 18 * s;
-        ImGui::PushFont(fonts_.semibold, 0);
-        float lineMid = cy + (fill >= 0 ? 22 : 28) * s;
-        dl->AddText(ImVec2(tx, TextTop(lineMid)), U32(p.text), ellipsis(label, tw).c_str());
-        ImGui::PopFont();
-        float by = lineMid + 13 * s;
+        float tx = x + 46 * s, tw = cardW - 46 * s - 14 * s;
+        float lineMid = cy + 18 * s;
+        float subW = 0;
         if (fill >= 0) {
-            dl->AddRectFilled(ImVec2(tx, by), ImVec2(tx + tw, by + 6 * s), U32(p.border), 3 * s);
-            dl->AddRectFilled(ImVec2(tx, by), ImVec2(tx + tw * std::clamp(fill, 0.0f, 1.0f), by + 6 * s),
-                              U32(warn ? p.bad : p.accent), 3 * s);
-            by += 12 * s;
+            ImGui::PushFont(nullptr, kSmall);
+            subW = ImGui::CalcTextSize(sub.c_str()).x;
+            dl->AddText(ImVec2(tx + tw - subW, TextTop(lineMid)), U32(p.muted), sub.c_str());
+            ImGui::PopFont();
+            subW += 12 * s;
         }
-        ImGui::PushFont(nullptr, kSmall);
-        dl->AddText(ImVec2(tx, by), U32(p.muted), ellipsis(sub, tw).c_str());
+        ImGui::PushFont(fonts_.semibold, 0);
+        dl->AddText(ImVec2(tx, TextTop(lineMid)), U32(p.text), ellipsis(label, tw - subW).c_str());
         ImGui::PopFont();
+        if (fill >= 0) {
+            float by = cy + 32 * s;
+            dl->AddRectFilled(ImVec2(tx, by), ImVec2(tx + tw, by + 4 * s), U32(p.border), 2 * s);
+            dl->AddRectFilled(ImVec2(tx, by), ImVec2(tx + tw * std::clamp(fill, 0.0f, 1.0f), by + 4 * s),
+                              U32(warn ? p.bad : p.accent), 2 * s);
+        } else {
+            ImGui::PushFont(nullptr, kSmall);
+            dl->AddText(ImVec2(tx, TextTop(cy + 34 * s)), U32(p.muted), ellipsis(sub, tw).c_str());
+            ImGui::PopFont();
+        }
         return hit;
     };
-    auto sectionEnd = [&](int n) { y += ((n + cols - 1) / cols) * (cardH + gap) + 18 * s; };
+    auto sectionEnd = [&](int n) { y += ((n + cols - 1) / cols) * (cardH + gap) + 14 * s; };
 
     heading("Drives");
     for (int i = 0; i < int(drives_.size()); i++) {
