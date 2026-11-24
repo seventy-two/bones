@@ -226,7 +226,8 @@ private:
     std::vector<SizeNode*> sizesRows_;  // the visible rows, last frame (for keys)
 
     std::wstring homeSel_;                  // what's selected on This PC
-    std::vector<std::wstring> hiddenUses_;  // hidden from those links by hand
+    std::vector<std::wstring> hiddenUses_;
+    std::unordered_set<std::wstring> linksClosed_;  // drives whose links are folded (lower case)  // hidden from those links by hand
     ULONGLONG arrivedAt_ = 0;
     bool visitCounted_ = true;
     void noteVisit();

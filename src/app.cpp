@@ -170,6 +170,9 @@ void App::load() {
         for (auto& u : j["uses"])
             if (u.is_object() && u.value("count", 0) > 0)
                 uses_.push_back({Widen(u.value("path", "")), u.value("count", 0), u.value("last", int64_t(0))});
+    if (j.contains("closedLinks") && j["closedLinks"].is_array())
+        for (auto& k : j["closedLinks"])
+            if (k.is_string()) linksClosed_.insert(Widen(k.get<std::string>()));
     if (j.contains("hiddenUses") && j["hiddenUses"].is_array())
         for (auto& h : j["hiddenUses"])
             if (h.is_string()) hiddenUses_.push_back(Widen(h.get<std::string>()));
@@ -179,7 +182,8 @@ void App::load() {
     } else {
         // The first run: the usual places.
         for (auto& k : KnownPlaces())
-            if (k.label != "Music") pins_.push_back({k.label, k.path});
+            // Not home itself (nothing lives there), Pictures or Music.
+            if (k.label != "Home" && k.label != "Pictures" && k.label != "Music") pins_.push_back({k.label, k.path});
     }
 }
 
@@ -198,6 +202,8 @@ void App::Save() {
         j["folderViews"].push_back({{"path", Narrow(k)}, {"view", folderViews_[k] ? "thumbs" : "details"}});
     j["pins"] = json::array();
     for (auto& p : pins_) j["pins"].push_back({{"label", p.label}, {"path", Narrow(p.path)}});
+    j["closedLinks"] = json::array();
+    for (auto& k : linksClosed_) j["closedLinks"].push_back(Narrow(k));
     j["hiddenUses"] = json::array();
     for (auto& h : hiddenUses_) j["hiddenUses"].push_back(Narrow(h));
     j["uses"] = json::array();
@@ -1283,7 +1289,7 @@ void App::drawHome() {
     float s = scale_;
     ImGui::BeginChild("home", ImVec2(0, 0), 0);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    float pad = 24 * s, rowGap = 2 * s;
+    float pad = 34 * s, rowGap = 2 * s;  // room on the left for the chevrons
     float avail = ImGui::GetContentRegionAvail().x - pad * 2;
     // One column: drives read top to bottom, like a list, each with its
     // most used folders under it.
@@ -1348,15 +1354,39 @@ void App::drawHome() {
         return hit;
     };
     // links draws the most used folders under root (but not skip), indented
-    // under the row above: name, then its full path, muted. Right-click to
-    // hide one.
-    auto links = [&](const std::wstring& root, const std::wstring& skip) {
-        auto top = TopUses(uses_, root, 4, int64_t(time(nullptr)));
+    // under the row above (which started at rowTop): name, then its full
+    // path, muted. A chevron left of that row folds them away (remembered);
+    // right-click one to hide it.
+    auto links = [&](const std::wstring& root, const std::wstring& skip, float rowTop) {
+        std::vector<Use> top;
+        for (auto& u : TopUses(uses_, root, 4, int64_t(time(nullptr))))
+            if (top.size() < 3 && (skip.empty() || !SamePath(u.path, skip))) top.push_back(u);
+        if (top.empty()) return;
+        std::wstring key = Lower(root);
+        bool closed = linksClosed_.count(key) > 0;
+        {
+            float cx = origin.x + pad - 14 * s, bw = 20 * s;
+            ImGui::SetCursorScreenPos(ImVec2(cx - bw / 2, rowTop));
+            ImGui::PushID("##fold");
+            if (ImGui::InvisibleButton("##fold", ImVec2(bw, cardH))) {
+                if (closed) linksClosed_.erase(key);
+                else linksClosed_.insert(key);
+                closed = !closed;
+                Save();
+            }
+            bool hov = ImGui::IsItemHovered();
+            if (hov) ImGui::SetTooltip(closed ? "Show the most used folders" : "Hide the most used folders");
+            ImGui::PushFont(nullptr, 10);
+            DrawCentred(dl, ImVec2(cx, rowTop + cardH / 2), closed ? icon::ChevronRight : icon::ChevronDown,
+                        U32(hov ? p.text : p.muted));
+            ImGui::PopFont();
+            ImGui::PopID();
+        }
+        if (closed) return;
         int shown = 0;
         float x = origin.x + pad + 38 * s, w = cardW - 38 * s, h = std::round(24 * s);
-        for (size_t i = 0; i < top.size() && shown < 3; i++) {
+        for (size_t i = 0; i < top.size(); i++) {
             const Use& u = top[i];
-            if (!skip.empty() && SamePath(u.path, skip)) continue;
             shown++;
             ImGui::PushID(Narrow(u.path).c_str());
             ImGui::SetCursorScreenPos(ImVec2(x, y));
@@ -1420,6 +1450,7 @@ void App::drawHome() {
         std::string sub = d.total ? FormatSize(d.free) + " free of " + FormatSize(d.total) : "Not ready";
         float fill = d.total ? 1.0f - float(double(d.free) / double(d.total)) : -1;
         ImGui::PushID(i);
+        float rowTop = y;
         if (card("##drive", d.root, driveIcon(d.type), d.label, sub, fill, d.total && d.free < d.total / 10)) Navigate(d.root);
         if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##drivemenu");
         if (ImGui::BeginPopup("##drivemenu")) {
@@ -1433,7 +1464,7 @@ void App::drawHome() {
             unhideItem(d.root);
             ImGui::EndPopup();
         }
-        links(d.root, L"");
+        links(d.root, L"", rowTop);
         ImGui::PopID();
     }
     if (drives_.empty()) {
@@ -1451,6 +1482,7 @@ void App::drawHome() {
             ImGui::PushID(int(100 + i));
             std::string home = d.uid == 0 ? "/root" : "your home";
             std::wstring root = FromLinux(L"/", d.name), homePath = d.uid == 0 ? FromLinux(L"/root", d.name) : L"";
+            float rowTop = y;
             if (card("##home", homePath.empty() ? root : homePath, icon::Home, Narrow(d.name), home, -1, false)) Navigate(DistroHome(d));
             if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##distromenu");
             if (ImGui::BeginPopup("##distromenu")) {
@@ -1459,7 +1491,7 @@ void App::drawHome() {
                 unhideItem(root);
                 ImGui::EndPopup();
             }
-            links(root, homePath);
+            links(root, homePath, rowTop);
             ImGui::PopID();
         }
     }
