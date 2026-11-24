@@ -1841,7 +1841,11 @@ void App::drawDetails() {
             ImGui::PushStyleColor(ImGuiCol_Header, p.accentLo);
             ImGui::PushStyleColor(ImGuiCol_HeaderHovered, sel ? p.accentLo : p.surface2);
             ImGui::PushStyleColor(ImGuiCol_HeaderActive, p.accentLo);
+            // No item spacing: ImGui grows a selectable by it, and the
+            // highlight would spill onto the rows above and below.
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0));
             ImGui::Selectable("##row", sel, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap, ImVec2(0, rowH));
+            ImGui::PopStyleVar();
             ImGui::PopStyleColor(3);
             bool hovered = ImGui::IsItemHovered();
             if (ImGui::IsItemClicked(0)) itemPressed(i);
