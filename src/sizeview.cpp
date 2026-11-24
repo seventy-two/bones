@@ -9,7 +9,7 @@
 #include <cmath>
 #include <cstdio>
 
-namespace shelf {
+namespace bones {
 
 namespace {
 
@@ -138,7 +138,7 @@ void App::drawSizes() {
             if (SamePath(d.root, cur_) && d.total) {
                 uint64_t used = d.total - d.free;
                 drive = FormatSize(used) + " used of " + FormatSize(d.total);
-                if (done && used > bytes) drive += "  \xC2\xB7  " + FormatSize(used - bytes) + " not in any folder shelf can read";
+                if (done && used > bytes) drive += "  \xC2\xB7  " + FormatSize(used - bytes) + " not in any folder bones can read";
             }
         if (!drive.empty()) dl->AddText(ImVec2(lx, origin.y + 32 * s), U32(p.muted), drive.c_str());
         ImGui::PopFont();
@@ -373,4 +373,4 @@ void App::sizesKeys() {
     else if (pressed(ImGuiKey_Delete)) recycleNode(sizesSel_, io.KeyShift);
 }
 
-}  // namespace shelf
+}  // namespace bones

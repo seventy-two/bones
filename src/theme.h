@@ -5,7 +5,7 @@
 
 #include "imgui.h"
 
-namespace shelf {
+namespace bones {
 
 struct Palette {
     ImVec4 bg, surface, surface2, border, text, muted, accent, accentLo, chip, bad, star, viewerBg;
@@ -84,4 +84,4 @@ std::string Ellipsis(const std::string& s, float width);
 float TextTop(float centreY);
 ImVec4 Hex(unsigned rgb, float a = 1.0f);
 
-}  // namespace shelf
+}  // namespace bones

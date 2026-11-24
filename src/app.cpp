@@ -11,7 +11,7 @@
 #include "imgui_internal.h"  // TableSetColumnSortDirection
 #include "nlohmann/json.hpp"
 
-namespace shelf {
+namespace bones {
 
 using json = nlohmann::json;
 
@@ -711,7 +711,7 @@ void App::Frame() {
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->Pos);
     ImGui::SetNextWindowSize(vp->Size);
-    ImGui::Begin("shelf", nullptr,
+    ImGui::Begin("bones", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -802,8 +802,8 @@ void App::drawToolbar() {
     // The name.
     float x = origin.x + 16 * s;
     ImGui::PushFont(fonts_.semibold, kTitle);
-    dl->AddText(ImVec2(x, TextTop(mid)), U32(active ? p.accent : p.muted), "shelf");
-    x += ImGui::CalcTextSize("shelf").x + 18 * s;
+    dl->AddText(ImVec2(x, TextTop(mid)), U32(active ? p.accent : p.muted), "bones");
+    x += ImGui::CalcTextSize("bones").x + 18 * s;
     ImGui::PopFont();
 
     // Back, forward, up, refresh.
@@ -2176,4 +2176,4 @@ void App::keys() {
     }
 }
 
-}  // namespace shelf
+}  // namespace bones

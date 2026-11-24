@@ -15,7 +15,7 @@
 #include <thread>
 #include <vector>
 
-namespace shelf {
+namespace bones {
 
 // SizeNode is a folder in the scan. The totals are everything under it
 // and grow while the scan runs. ownBytes, ownFiles, kids and error are
@@ -88,4 +88,4 @@ private:
     std::atomic<ULONGLONG> finished_{0};
 };
 
-}  // namespace shelf
+}  // namespace bones

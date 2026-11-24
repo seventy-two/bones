@@ -1,5 +1,5 @@
 @echo off
-rem Builds build\shelf.exe and runs the tests. Needs Visual Studio 2022 (or
+rem Builds build\bones.exe and runs the tests. Needs Visual Studio 2022 (or
 rem its Build Tools) with the C++ workload. Run from any prompt.
 setlocal
 cd /d "%~dp0"
@@ -14,15 +14,15 @@ call "%VS%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 
 if not exist build\obj mkdir build\obj
 if not exist build\tests mkdir build\tests
-set CFLAGS=/nologo /std:c++17 /O2 /EHsc /utf-8 /W3 /MP /DUNICODE /D_UNICODE /DNOMINMAX /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS /DIMGUI_DISABLE_DEMO_WINDOWS /DIMGUI_USE_WCHAR32 /DIMGUI_USER_CONFIG=\"imconfig_shelf.h\" /Isrc /Ithird_party /Ithird_party\imgui /Ithird_party\imgui\backends
+set CFLAGS=/nologo /std:c++17 /O2 /EHsc /utf-8 /W3 /MP /DUNICODE /D_UNICODE /DNOMINMAX /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS /DIMGUI_DISABLE_DEMO_WINDOWS /DIMGUI_USE_WCHAR32 /DIMGUI_USER_CONFIG=\"imconfig_bones.h\" /Isrc /Ithird_party /Ithird_party\imgui /Ithird_party\imgui\backends
 
 echo Building tests...
 cl %CFLAGS% /Fobuild\tests\ /Fe:build\tests.exe tests\tests.cpp src\paths.cpp src\sizes.cpp > build\tests.log 2>&1 || (type build\tests.log & exit /b 1)
 build\tests.exe || exit /b 1
 
-echo Building shelf.exe...
+echo Building bones.exe...
 rc /nologo /fo build\app.res src\app.rc || exit /b 1
-cl %CFLAGS% /Fobuild\obj\ /Fe:build\shelf.exe src\*.cpp third_party\imgui\*.cpp third_party\imgui\backends\*.cpp build\app.res ^
+cl %CFLAGS% /Fobuild\obj\ /Fe:build\bones.exe src\*.cpp third_party\imgui\*.cpp third_party\imgui\backends\*.cpp build\app.res ^
     /link /SUBSYSTEM:WINDOWS d3d11.lib dxgi.lib dwmapi.lib windowscodecs.lib ole32.lib oleaut32.lib shell32.lib shlwapi.lib comctl32.lib user32.lib gdi32.lib advapi32.lib propsys.lib > build\build.log 2>&1 || (type build\build.log & exit /b 1)
 findstr /i /c:"warning" build\build.log
-echo Built build\shelf.exe
+echo Built build\bones.exe

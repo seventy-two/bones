@@ -10,7 +10,7 @@
 #include "sizes.h"
 #endif
 
-using namespace shelf;
+using namespace bones;
 
 static int failures = 0;
 
@@ -236,7 +236,7 @@ static void writeFile(const std::wstring& path, size_t bytes) {
 static void testSizes() {
     wchar_t tmp[MAX_PATH];
     GetTempPathW(MAX_PATH, tmp);
-    std::wstring root = std::wstring(tmp) + L"shelf-sizes-test";
+    std::wstring root = std::wstring(tmp) + L"bones-sizes-test";
     CreateDirectoryW(root.c_str(), nullptr);
     CreateDirectoryW((root + L"\\a").c_str(), nullptr);
     CreateDirectoryW((root + L"\\a\\b").c_str(), nullptr);

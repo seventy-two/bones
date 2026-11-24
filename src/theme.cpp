@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace shelf {
+namespace bones {
 
 ImVec4 Hex(unsigned rgb, float a) {
     return ImVec4(((rgb >> 16) & 0xFF) / 255.0f, ((rgb >> 8) & 0xFF) / 255.0f, (rgb & 0xFF) / 255.0f, a);
@@ -200,4 +200,4 @@ std::string Ellipsis(const std::string& s, float width) {
     return s.substr(0, lo) + dots;
 }
 
-}  // namespace shelf
+}  // namespace bones

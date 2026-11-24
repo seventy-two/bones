@@ -31,7 +31,7 @@
 #include "imgui.h"
 #include "paths.h"
 
-namespace shelf {
+namespace bones {
 
 // Tex is a picture on the GPU, for ImGui. For icons, content is the part
 // with anything drawn in it (the image lists pad small icons out to the
@@ -136,4 +136,4 @@ private:
     std::unordered_map<std::wstring, std::wstring> types_;
 };
 
-}  // namespace shelf
+}  // namespace bones

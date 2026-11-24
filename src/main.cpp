@@ -1,12 +1,12 @@
-// shelf: a plain file browser. Dear ImGui on Direct3D 11, drawn only
+// bones: a plain file browser. Dear ImGui on Direct3D 11, drawn only
 // when something happens, so it costs nothing while it sits there.
 //
-//   shelf.exe [folder]              opens there (else where it was left)
-//   shelf.exe -bench <dir> <out>    times thumbnails for a folder, no window
+//   bones.exe [folder]              opens there (else where it was left)
+//   bones.exe -bench <dir> <out>    times thumbnails for a folder, no window
 //
-// Test runs: SHELF_DATA (state and cache elsewhere; runs beside the real
-// one), SHELF_POS=x,y,w,h, SHELF_VIEW=thumbs|details|sizes,
-// SHELF_SORT=name|modified|created|type|size[-desc], SHELF_SELECT=<name>.
+// Test runs: BONES_DATA (state and cache elsewhere; runs beside the real
+// one), BONES_POS=x,y,w,h, BONES_VIEW=thumbs|details|sizes,
+// BONES_SORT=name|modified|created|type|size[-desc], BONES_SELECT=<name>.
 #include <windows.h>
 #include <d3d11.h>
 #include <dbt.h>
@@ -30,7 +30,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 namespace {
 
 constexpr UINT WM_APP_WAKE = WM_APP + 1;
-const wchar_t* kClassName = L"shelf";
+const wchar_t* kClassName = L"bones";
 
 ID3D11Device* device = nullptr;
 ID3D11DeviceContext* context = nullptr;
@@ -39,7 +39,7 @@ ID3D11RenderTargetView* target = nullptr;
 UINT resizeW = 0, resizeH = 0;
 
 HWND hwnd = nullptr;
-std::unique_ptr<shelf::App> app;
+std::unique_ptr<bones::App> app;
 int framesWanted = 2;
 
 void createTarget() {
@@ -97,7 +97,7 @@ void renderFrame() {
     ImGui::NewFrame();
     app->Frame();
     ImGui::Render();
-    const ImVec4& bg = shelf::Colours().bg;
+    const ImVec4& bg = bones::Colours().bg;
     const float clear[4] = {bg.x, bg.y, bg.z, 1};
     context->OMSetRenderTargets(1, &target, nullptr);
     context->ClearRenderTargetView(target, clear);
@@ -138,7 +138,7 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wParam, LPARAM lParam) {
     // Explorer's own menu draws some of its items through us.
     if (msg == WM_INITMENUPOPUP || msg == WM_DRAWITEM || msg == WM_MEASUREITEM || msg == WM_MENUCHAR) {
         LRESULT r = 0;
-        if (shelf::HandleMenuMessage(msg, wParam, lParam, r)) return r;
+        if (bones::HandleMenuMessage(msg, wParam, lParam, r)) return r;
     }
     if (ImGui_ImplWin32_WndProcHandler(h, msg, wParam, lParam)) return true;
     switch (msg) {
@@ -229,7 +229,7 @@ int bench(const std::wstring& dir, const std::wstring& out) {
     if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, levels, 1, D3D11_SDK_VERSION, &device,
                                  nullptr, &context)))
         return 1;
-    std::string report = shelf::Thumbs::Bench(device, dir, true);
+    std::string report = bones::Thumbs::Bench(device, dir, true);
     FILE* f = _wfopen(out.c_str(), L"w");
     if (f) {
         fputs(report.c_str(), f);
@@ -243,12 +243,12 @@ int bench(const std::wstring& dir, const std::wstring& out) {
 
 }  // namespace
 
-void ShelfAssert(const char* expr, const char* file, int line) {
+void BonesAssert(const char* expr, const char* file, int line) {
     static int logged = 0;
     if (logged++ > 50) return;
     wchar_t dir[MAX_PATH + 1];
     DWORD n = GetTempPathW(MAX_PATH + 1, dir);
-    FILE* f = _wfopen((std::wstring(dir, n) + L"shelf-assert.log").c_str(), L"a");
+    FILE* f = _wfopen((std::wstring(dir, n) + L"bones-assert.log").c_str(), L"a");
     if (!f) return;
     fprintf(f, "%s:%d: %s\n", file, line, expr);
     fclose(f);
@@ -276,19 +276,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     RegisterClassExW(&wc);
 
     float scale = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY));
-    hwnd = CreateWindowExW(WS_EX_ACCEPTFILES, kClassName, L"shelf", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+    hwnd = CreateWindowExW(WS_EX_ACCEPTFILES, kClassName, L"bones", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                            int(1200 * scale), int(780 * scale), nullptr, nullptr, instance, nullptr);
 
     // Back where it was, if that's still on a screen.
     bool maximised = false;
     RECT place{};
-    std::wstring pos = env(L"SHELF_POS");
+    std::wstring pos = env(L"BONES_POS");
     bool test = !pos.empty();
     if (test) {
         int x, y, w, h;
         if (swscanf(pos.c_str(), L"%d,%d,%d,%d", &x, &y, &w, &h) == 4) place = {x, y, x + w, y + h};
     } else {
-        shelf::App::Placement(place, maximised);
+        bones::App::Placement(place, maximised);
     }
     if (place.right > place.left && MonitorFromRect(&place, MONITOR_DEFAULTTONULL)) {
         WINDOWPLACEMENT wp{sizeof(wp)};
@@ -305,7 +305,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
     if (!createDevice()) {
-        MessageBoxW(nullptr, L"Couldn't start Direct3D 11.", L"shelf", MB_ICONERROR);
+        MessageBoxW(nullptr, L"Couldn't start Direct3D 11.", L"bones", MB_ICONERROR);
         return 1;
     }
 
@@ -317,20 +317,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(device, context);
 
-    app = std::make_unique<shelf::App>(hwnd, device, [] { PostMessageW(hwnd, WM_APP_WAKE, 0, 0); });
+    app = std::make_unique<bones::App>(hwnd, device, [] { PostMessageW(hwnd, WM_APP_WAKE, 0, 0); });
     app->SetScale(ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd));
-    if (std::wstring v = env(L"SHELF_VIEW"); v == L"sizes") app->SetSizes();
+    if (std::wstring v = env(L"BONES_VIEW"); v == L"sizes") app->SetSizes();
     else if (!v.empty()) app->SetView(v == L"thumbs");
-    if (std::wstring v = env(L"SHELF_SORT"); !v.empty()) {
+    if (std::wstring v = env(L"BONES_SORT"); !v.empty()) {
         bool desc = v.size() > 5 && v.substr(v.size() - 5) == L"-desc";
         if (desc) v = v.substr(0, v.size() - 5);
         const wchar_t* names[] = {L"name", L"modified", L"created", L"type", L"size"};
         for (int k = 0; k < 5; k++)
-            if (v == names[k]) app->SetSort(shelf::SortKey(k), desc);
+            if (v == names[k]) app->SetSort(bones::SortKey(k), desc);
     }
-    if (start.empty()) start = env(L"SHELF_OPEN");
+    if (start.empty()) start = env(L"BONES_OPEN");
     app->Start(start);
-    if (std::wstring sel = env(L"SHELF_SELECT"); !sel.empty()) app->SelectName(sel);
+    if (std::wstring sel = env(L"BONES_SELECT"); !sel.empty()) app->SelectName(sel);
 
     ShowWindow(hwnd, test ? SW_SHOWNOACTIVATE : maximised ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
     UpdateWindow(hwnd);

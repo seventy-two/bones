@@ -1,4 +1,4 @@
-# shelf
+# bones
 
 A plain file browser for Windows: drives, pinned folders and your WSL home
 down the side, and a folder as thumbnails or as details. None of
@@ -51,7 +51,7 @@ Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
     full; camera raws use their embedded preview; EXIF rotation is applied;
   - videos, PDFs and the like go to the shell's own thumbnailers, on
     threads of their own so they never hold up the images;
-  - everything goes in shelf's own disk cache (`%LOCALAPPDATA%\shelf\thumbs`,
+  - everything goes in bones's own disk cache (`%LOCALAPPDATA%\bones\thumbs`,
     keyed by path, size and time, kept under 1 GB), which also covers WSL
     and network folders that Windows doesn't cache;
   - the worker threads run at below-normal priority.
@@ -77,16 +77,16 @@ Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
 
 ## Default for folders
 
-`scripts\default-folders.ps1` makes shelf the way folders and drives open for
+`scripts\default-folders.ps1` makes bones the way folders and drives open for
 your user (double-clicking a folder, "open folder" in other apps,
 `start C:\x`); `-Undo` puts Explorer back. It only writes under
-`HKCU\Software\Classes`: an "Open in shelf" verb on `Directory` and `Drive`,
+`HKCU\Software\Classes`: an "Open in bones" verb on `Directory` and `Drive`,
 named as the default there and on `Folder`. Virtual folders (This PC, Recycle
 Bin, Control Panel) have no such verb, so they still open in Explorer, and
 Explorer's own Open stays in the right-click menu.
 
-`scripts\shelf-wine.ahk` (AutoHotkey v1, in the Startup folder) maps Win+E to
-shelf and Win+Shift+E to Explorer.
+`scripts\bones-wine.ahk` (AutoHotkey v1, in the Startup folder) maps Win+E to
+bones and Win+Shift+E to Explorer.
 
 Windows still uses Explorer for "Show in folder" (apps call
 `SHOpenFolderAndSelectItems`), the Open/Save dialogs, the desktop and the
@@ -94,13 +94,13 @@ taskbar.
 
 ## Building
 
-`build.bat` (Visual Studio 2022 C++ tools) builds `build\shelf.exe` and
+`build.bat` (Visual Studio 2022 C++ tools) builds `build\bones.exe` and
 runs the tests. The tests also build anywhere:
 
     g++ -std=c++17 -Isrc tests/tests.cpp src/paths.cpp -o tests && ./tests
 
-`shelf.exe <folder>` opens a folder. `shelf.exe -bench <folder> <report>`
+`bones.exe <folder>` opens a folder. `bones.exe -bench <folder> <report>`
 times thumbnails for a folder with no window.
 
-ImGui's internal checks write to `%TEMP%\shelf-assert.log` rather than
+ImGui's internal checks write to `%TEMP%\bones-assert.log` rather than
 stopping the app.

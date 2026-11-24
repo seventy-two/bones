@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace shelf {
+namespace bones {
 
 namespace {
 
@@ -199,4 +199,4 @@ void SizeScan::finish(SizeNode* n) {
     }
 }
 
-}  // namespace shelf
+}  // namespace bones

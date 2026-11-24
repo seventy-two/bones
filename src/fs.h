@@ -14,15 +14,15 @@
 
 #include "paths.h"
 
-namespace shelf {
+namespace bones {
 
 std::wstring Widen(std::string_view s);
 std::string Narrow(std::wstring_view s);
 std::string ErrorText(DWORD code);
 
-// DataDir is %APPDATA%\shelf (or SHELF_DATA, for test runs).
+// DataDir is %APPDATA%\bones (or BONES_DATA, for test runs).
 std::wstring DataDir();
-// CacheDir is %LOCALAPPDATA%\shelf (or SHELF_DATA\cache).
+// CacheDir is %LOCALAPPDATA%\bones (or BONES_DATA\cache).
 std::wstring CacheDir();
 bool ReadFileBytes(const std::wstring& path, std::string& out);
 bool WriteFileAtomic(const std::wstring& path, const std::string& data);
@@ -111,4 +111,4 @@ std::string ShellMenu(HWND owner, const std::wstring& dir, const std::vector<std
 // shell while a ShellMenu is open.
 bool HandleMenuMessage(UINT msg, WPARAM wParam, LPARAM lParam, LRESULT& result);
 
-}  // namespace shelf
+}  // namespace bones

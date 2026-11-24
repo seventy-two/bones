@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace shelf {
+namespace bones {
 
 // Entry is one thing in a folder.
 struct Entry {
@@ -113,4 +113,4 @@ bool MediaHeavy(const std::vector<Entry>& entries);
 // (programs, shortcuts), so the type's icon won't do.
 bool OwnIcon(const std::wstring& lowerExt);
 
-}  // namespace shelf
+}  // namespace bones

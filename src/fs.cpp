@@ -10,7 +10,7 @@
 
 using Microsoft::WRL::ComPtr;
 
-namespace shelf {
+namespace bones {
 
 std::wstring Widen(std::string_view s) {
     if (s.empty()) return {};
@@ -106,13 +106,13 @@ ComPtr<IFileOperation> fileOp(HWND owner, DWORD flags) {
 }  // namespace
 
 std::wstring DataDir() {
-    if (const wchar_t* d = _wgetenv(L"SHELF_DATA"); d && *d) return makeDir(d);
-    return makeDir(knownFolder(FOLDERID_RoamingAppData) + L"\\shelf");
+    if (const wchar_t* d = _wgetenv(L"BONES_DATA"); d && *d) return makeDir(d);
+    return makeDir(knownFolder(FOLDERID_RoamingAppData) + L"\\bones");
 }
 
 std::wstring CacheDir() {
-    if (const wchar_t* d = _wgetenv(L"SHELF_DATA"); d && *d) return makeDir(std::wstring(d) + L"\\cache");
-    return makeDir(knownFolder(FOLDERID_LocalAppData) + L"\\shelf");
+    if (const wchar_t* d = _wgetenv(L"BONES_DATA"); d && *d) return makeDir(std::wstring(d) + L"\\cache");
+    return makeDir(knownFolder(FOLDERID_LocalAppData) + L"\\bones");
 }
 
 bool ReadFileBytes(const std::wstring& path, std::string& out) {
@@ -563,4 +563,4 @@ std::string ShellMenu(HWND owner, const std::wstring& dir, const std::vector<std
     return picked;
 }
 
-}  // namespace shelf
+}  // namespace bones

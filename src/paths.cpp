@@ -6,7 +6,7 @@
 #include <cwctype>
 #include <unordered_set>
 
-namespace shelf {
+namespace bones {
 
 namespace {
 
@@ -342,4 +342,4 @@ bool OwnIcon(const std::wstring& e) {
            e == L".scr" || e == L".ico";
 }
 
-}  // namespace shelf
+}  // namespace bones

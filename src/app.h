@@ -21,7 +21,7 @@
 #include "theme.h"
 #include "thumbs.h"
 
-namespace shelf {
+namespace bones {
 
 class App {
 public:
@@ -256,4 +256,4 @@ private:
     ULONGLONG messageAt_ = 0;
 };
 
-}  // namespace shelf
+}  // namespace bones

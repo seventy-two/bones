@@ -18,7 +18,7 @@
 
 using Microsoft::WRL::ComPtr;
 
-namespace shelf {
+namespace bones {
 
 namespace {
 
@@ -807,8 +807,8 @@ std::string Thumbs::Bench(ID3D11Device* device, const std::wstring& dir, bool sh
                  s.made, s.made ? s.makeMs / s.made : 0.0, s.fromCache, s.fromCache ? s.cacheMs / s.fromCache : 0.0, s.failed);
         report += line;
     };
-    run("shelf, first time");
-    run("shelf, again (disk cache)");
+    run("bones, first time");
+    run("bones, again (disk cache)");
 
     if (shellToo) {
         // Explorer's way: the shell's image factory, from Windows'
@@ -891,4 +891,4 @@ const std::wstring& Icons::TypeName(const Entry& e) {
     return types_.emplace(key, name).first->second;
 }
 
-}  // namespace shelf
+}  // namespace bones
