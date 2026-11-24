@@ -103,6 +103,8 @@ static void testMatches() {
 
 static void testPaths() {
     CHECK(Normalise(L"c:") == L"C:\\");
+    // What CommandLineToArgvW makes of "C:\" from the folder open verb.
+    CHECK(Normalise(L"C:\"") == L"C:\\");
     CHECK(Normalise(L"C:/Users/seven/") == L"C:\\Users\\seven");
     CHECK(Normalise(L"\"C:\\Users\\seven\"") == L"C:\\Users\\seven");
     CHECK(Normalise(L"\\\\wsl$\\Debian\\root") == L"\\\\wsl.localhost\\Debian\\root");

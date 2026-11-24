@@ -55,6 +55,23 @@ Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
   in the app's slate colours rather than Windows' yellow.
 - The folder refreshes itself when its contents change.
 
+## Default for folders
+
+`scripts\default-folders.ps1` makes shelf the way folders and drives open for
+your user (double-clicking a folder, "open folder" in other apps,
+`start C:\x`); `-Undo` puts Explorer back. It only writes under
+`HKCU\Software\Classes`: an "Open in shelf" verb on `Directory` and `Drive`,
+named as the default there and on `Folder`. Virtual folders (This PC, Recycle
+Bin, Control Panel) have no such verb, so they still open in Explorer, and
+Explorer's own Open stays in the right-click menu.
+
+`scripts\shelf-wine.ahk` (AutoHotkey v1, in the Startup folder) maps Win+E to
+shelf and Win+Shift+E to Explorer.
+
+Windows still uses Explorer for "Show in folder" (apps call
+`SHOpenFolderAndSelectItems`), the Open/Save dialogs, the desktop and the
+taskbar.
+
 ## Building
 
 `build.bat` (Visual Studio 2022 C++ tools) builds `build\shelf.exe` and
