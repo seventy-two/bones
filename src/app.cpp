@@ -121,7 +121,8 @@ void App::SetScale(float scale) {
 }
 
 void App::SetSort(SortKey key, bool descending) {
-    sort_ = {key, descending};
+    sort_.key = key;
+    sort_.descending = descending;
     sortApplied_ = false;
     rebuild();
 }
@@ -139,6 +140,7 @@ void App::load() {
     tile_ = std::clamp(j.value("tile", 150.0f), 72.0f, 320.0f);
     sort_.key = SortKey(std::clamp(j.value("sortKey", 0), 0, 4));
     sort_.descending = j.value("sortDescending", false);
+    sort_.foldersFirst = j.value("foldersFirst", true);
     showHidden_ = j.value("hidden", false);
     if (j.contains("pins") && j["pins"].is_array()) {
         for (auto& p : j["pins"])
@@ -158,6 +160,7 @@ void App::Save() {
     j["tile"] = tile_;
     j["sortKey"] = int(sort_.key);
     j["sortDescending"] = sort_.descending;
+    j["foldersFirst"] = sort_.foldersFirst;
     j["hidden"] = showHidden_;
     j["last"] = Narrow(cur_);
     j["pins"] = json::array();
@@ -801,6 +804,11 @@ void App::drawToolbar() {
             ImGui::Separator();
             if (ImGui::MenuItem("Ascending", nullptr, !sort_.descending)) SetSort(sort_.key, false);
             if (ImGui::MenuItem("Descending", nullptr, sort_.descending)) SetSort(sort_.key, true);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Folders first", nullptr, sort_.foldersFirst)) {
+                sort_.foldersFirst = !sort_.foldersFirst;
+                rebuild();
+            }
             ImGui::EndPopup();
         }
         ImGui::PopStyleVar();
@@ -1670,6 +1678,11 @@ void App::drawMenus() {
             ImGui::Separator();
             if (ImGui::MenuItem("Ascending", nullptr, !sort_.descending)) SetSort(sort_.key, false);
             if (ImGui::MenuItem("Descending", nullptr, sort_.descending)) SetSort(sort_.key, true);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Folders first", nullptr, sort_.foldersFirst)) {
+                sort_.foldersFirst = !sort_.foldersFirst;
+                rebuild();
+            }
             ImGui::EndMenu();
         }
         if (ImGui::MenuItem("Show hidden files", "Ctrl+H", showHidden_)) {

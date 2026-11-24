@@ -84,7 +84,7 @@ void Order(const std::vector<Entry>& entries, const std::vector<std::wstring>& t
     auto byName = [&](int x, int y) { return NaturalCompare(entries[x].name, entries[y].name); };
     std::stable_sort(idx.begin(), idx.end(), [&](int x, int y) {
         const Entry &a = entries[x], &b = entries[y];
-        if (a.dir != b.dir) return a.dir;  // folders first, either way round
+        if (sort.foldersFirst && a.dir != b.dir) return a.dir;  // either way round
         int c = 0;
         switch (sort.key) {
         case SortKey::Name: c = byName(x, y); break;

@@ -79,6 +79,14 @@ static void testOrder() {
     Order(es, {}, {SortKey::Modified, true}, idx);
     CHECK((names(es, idx) == std::vector<std::wstring>{L"Alpha", L"zeta", L"b10.txt", L"a.jpg", L"b2.txt"}));
 
+    // Folders in with the files.
+    Sort mixed{SortKey::Name, false, false};
+    Order(es, {}, mixed, idx);
+    CHECK((names(es, idx) == std::vector<std::wstring>{L"a.jpg", L"Alpha", L"b2.txt", L"b10.txt", L"zeta"}));
+    Sort bySize{SortKey::Size, true, false};
+    Order(es, {}, bySize, idx);
+    CHECK((names(es, idx) == std::vector<std::wstring>{L"a.jpg", L"b2.txt", L"b10.txt", L"Alpha", L"zeta"}));
+
     std::vector<std::wstring> types = {L"Text", L"Folder", L"Text", L"Folder", L"JPEG"};
     Order(es, types, {SortKey::Type, false}, idx);
     CHECK((names(es, idx) == std::vector<std::wstring>{L"Alpha", L"zeta", L"a.jpg", L"b2.txt", L"b10.txt"}));

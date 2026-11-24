@@ -8,7 +8,9 @@ Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
   right-click to move or unpin), every drive with its free space, and
   each WSL distro with its root and home (read from the registry, so a
   stopped distro isn't started until you click it).
-- **Thumbnails or details** (Ctrl+1 / Ctrl+2). Details sorts by name,
+- **Thumbnails or details** (Ctrl+1 / Ctrl+2). "Folders first" (sort menu,
+  or right-click empty space > Sort by) can be turned off to sort folders
+  in with the files. Details sorts by name,
   date modified, date created, type or size from the headers; the
   thumbnail view has the same sort in a menu, and a size slider
   (or Ctrl+scroll).

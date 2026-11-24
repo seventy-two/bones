@@ -25,13 +25,14 @@ enum class SortKey { Name, Modified, Created, Type, Size };
 struct Sort {
     SortKey key = SortKey::Name;
     bool descending = false;
+    bool foldersFirst = true;  // else folders sort in with the files
 };
 
 // NaturalLess compares names the way Explorer does: ignoring case, with
 // runs of digits compared as numbers ("img2" before "img10").
 int NaturalCompare(const std::wstring& a, const std::wstring& b);
 
-// Order sorts indices into entries: folders first, then by the key, with
+// Order sorts indices into entries: folders first (if asked), then by the key, with
 // the name breaking ties. typeOf gives each entry's type name (for
 // SortKey::Type); it may be empty for other keys.
 void Order(const std::vector<Entry>& entries, const std::vector<std::wstring>& typeOf, Sort sort, std::vector<int>& idx);
