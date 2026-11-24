@@ -1,6 +1,7 @@
 #include "paths.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cwctype>
 #include <unordered_set>
@@ -293,6 +294,47 @@ bool MediaHeavy(const std::vector<Entry>& entries) {
         if (IsMedia(e.ext)) media++;
     }
     return media >= 20 || (media >= 3 && media * 2 >= files);
+}
+
+double UseScore(const Use& u, int64_t now) {
+    double days = std::max<int64_t>(0, now - u.last) / 86400.0;
+    return u.count * std::pow(0.5, days / 14.0);
+}
+
+void RecordUse(std::vector<Use>& uses, const std::wstring& path, int64_t now, size_t max) {
+    std::wstring p = Normalise(path);
+    if (p.empty() || IsRoot(p)) return;
+    auto it = std::find_if(uses.begin(), uses.end(), [&](const Use& u) { return SamePath(u.path, p); });
+    if (it != uses.end()) {
+        // Decay the old visits to now, so a burst long ago fades.
+        it->count = std::max(1, int(std::lround(UseScore(*it, now)))) + 1;
+        it->last = now;
+        return;
+    }
+    if (uses.size() >= max) {
+        auto worst = std::min_element(uses.begin(), uses.end(), [&](const Use& a, const Use& b) {
+            return UseScore(a, now) < UseScore(b, now);
+        });
+        uses.erase(worst);
+    }
+    uses.push_back({p, 1, now});
+}
+
+void ForgetUse(std::vector<Use>& uses, const std::wstring& path) {
+    uses.erase(std::remove_if(uses.begin(), uses.end(), [&](const Use& u) { return SamePath(u.path, path); }),
+               uses.end());
+}
+
+std::vector<Use> TopUses(const std::vector<Use>& uses, const std::wstring& root, size_t n, int64_t now) {
+    std::vector<Use> out;
+    for (const auto& u : uses)
+        if (SamePath(Root(u.path), root) && !SamePath(u.path, root)) out.push_back(u);
+    std::stable_sort(out.begin(), out.end(), [&](const Use& a, const Use& b) {
+        double sa = UseScore(a, now), sb = UseScore(b, now);
+        return sa != sb ? sa > sb : a.last > b.last;
+    });
+    if (out.size() > n) out.resize(n);
+    return out;
 }
 
 bool OwnIcon(const std::wstring& e) {

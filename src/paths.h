@@ -73,6 +73,25 @@ std::vector<Crumb> Crumbs(const std::wstring& path);
 // taken (names compared ignoring case).
 std::wstring UniqueName(const std::vector<Entry>& entries, const std::wstring& base);
 
+// Use is how much a folder has been used: visits, and the last one
+// (seconds since 1970).
+struct Use {
+    std::wstring path;
+    int count = 0;
+    int64_t last = 0;
+};
+// UseScore weighs visits by how recent they are: the score halves for
+// every two weeks since the last visit.
+double UseScore(const Use& u, int64_t now);
+// RecordUse counts a visit to path, keeping at most max folders (the
+// lowest scores go).
+void RecordUse(std::vector<Use>& uses, const std::wstring& path, int64_t now, size_t max = 400);
+// ForgetUse drops path (a folder that's gone).
+void ForgetUse(std::vector<Use>& uses, const std::wstring& path);
+// TopUses gives the n best-scored folders under root (not root itself),
+// best first.
+std::vector<Use> TopUses(const std::vector<Use>& uses, const std::wstring& root, size_t n, int64_t now);
+
 // FormatSize: "0 bytes", "812 bytes", "4.2 KB", "38 MB", "1.27 GB".
 std::string FormatSize(uint64_t bytes);
 

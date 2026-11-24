@@ -199,6 +199,13 @@ private:
     std::unordered_map<std::wstring, bool> folderViews_;  // picked by hand, by lower-case path
     std::vector<std::wstring> folderViewOrder_;
     std::vector<Pin> pins_;
+    // Folders by use, for This PC's links under each drive. A visit counts
+    // once you've stayed 2 s, so folders passed through on the way don't.
+    std::vector<Use> uses_;
+    std::vector<std::wstring> hiddenUses_;  // hidden from those links by hand
+    ULONGLONG arrivedAt_ = 0;
+    bool visitCounted_ = true;
+    void noteVisit();
 
     // Sidebar data.
     std::vector<Drive> drives_;

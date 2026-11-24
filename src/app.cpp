@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <thread>
 
 #include "imgui_internal.h"  // TableSetColumnSortDirection
@@ -179,6 +180,13 @@ void App::load() {
                 folderViews_[key] = v.value("view", "") == "thumbs";
                 folderViewOrder_.push_back(key);
             }
+    if (j.contains("uses") && j["uses"].is_array())
+        for (auto& u : j["uses"])
+            if (u.is_object() && u.value("count", 0) > 0)
+                uses_.push_back({Widen(u.value("path", "")), u.value("count", 0), u.value("last", int64_t(0))});
+    if (j.contains("hiddenUses") && j["hiddenUses"].is_array())
+        for (auto& h : j["hiddenUses"])
+            if (h.is_string()) hiddenUses_.push_back(Widen(h.get<std::string>()));
     if (j.contains("pins") && j["pins"].is_array()) {
         for (auto& p : j["pins"])
             if (p.is_object()) pins_.push_back({p.value("label", ""), Widen(p.value("path", ""))});
@@ -190,6 +198,7 @@ void App::load() {
 }
 
 void App::Save() {
+    noteVisit();
     json j;
     j["view"] = thumbView_ ? "thumbs" : "details";
     j["tile"] = tile_;
@@ -203,6 +212,10 @@ void App::Save() {
         j["folderViews"].push_back({{"path", Narrow(k)}, {"view", folderViews_[k] ? "thumbs" : "details"}});
     j["pins"] = json::array();
     for (auto& p : pins_) j["pins"].push_back({{"label", p.label}, {"path", Narrow(p.path)}});
+    j["hiddenUses"] = json::array();
+    for (auto& h : hiddenUses_) j["hiddenUses"].push_back(Narrow(h));
+    j["uses"] = json::array();
+    for (auto& u : uses_) j["uses"].push_back({{"path", Narrow(u.path)}, {"count", u.count}, {"last", u.last}});
     WINDOWPLACEMENT wp{sizeof(wp)};
     if (GetWindowPlacement(hwnd_, &wp)) {
         RECT r = wp.rcNormalPosition;
@@ -230,8 +243,22 @@ void App::Start(const std::wstring& path) { go(path, false, L"", -1); }
 
 void App::Navigate(std::wstring path, bool record) { go(std::move(path), record, L"", -1); }
 
+// noteVisit counts the folder we're in, once, if we've been here 2 s.
+void App::noteVisit() {
+    if (visitCounted_ || cur_.empty() || now() - arrivedAt_ < 2000) return;
+    visitCounted_ = true;
+    for (auto& h : hiddenUses_)
+        if (SamePath(h, cur_)) return;
+    RecordUse(uses_, cur_, int64_t(time(nullptr)));
+}
+
 void App::go(std::wstring path, bool record, std::wstring focus, float scroll) {
     path = Normalise(path);  // "" is This PC
+    if (!SamePath(path, cur_)) {
+        noteVisit();
+        arrivedAt_ = now();
+        visitCounted_ = false;
+    }
     if (record && started_ && !SamePath(path, cur_)) {
         std::wstring f = focus_ >= 0 && focus_ < int(view_.size()) ? at(focus_).name : L"";
         back_.push_back({cur_, f, scrollY_});
@@ -320,6 +347,9 @@ void App::took(Listing&& l) {
     if (!l.ok) {
         listError_ = ErrorText(l.error);
         entries_.clear();
+        // A folder that's gone (or locked) shouldn't stay in This PC's links.
+        ForgetUse(uses_, l.dir);
+        if (SamePath(l.dir, cur_)) visitCounted_ = true;
     } else {
         listError_.clear();
         entries_ = std::move(l.entries);
@@ -1255,10 +1285,10 @@ void App::drawHome() {
     float s = scale_;
     ImGui::BeginChild("home", ImVec2(0, 0), 0);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    float pad = 24 * s, gap = 10 * s, rowGap = 2 * s;
+    float pad = 24 * s, rowGap = 2 * s;
     float avail = ImGui::GetContentRegionAvail().x - pad * 2;
-    // One column: drives read top to bottom, like a list.
-    int cols = 1;
+    // One column: drives read top to bottom, like a list, each with its
+    // most used folders under it.
     float cardW = std::min(avail, 520 * s), cardH = std::round(50 * s);
     ImVec2 origin = ImGui::GetCursorScreenPos();
     float y = origin.y + pad;
@@ -1269,14 +1299,13 @@ void App::drawHome() {
         y += ImGui::GetTextLineHeight() + 8 * s;
         ImGui::PopFont();
     };
-    // card draws one compact row-card, at index k of its section; true
-    // when clicked. With a fill (a drive), the name and free space share
+    // card draws one compact row at y and moves y on; true when clicked. With a fill (a drive), the name and free space share
     // the top line and a thin bar sits under them; without, the sub line
     // goes under the name.
-    auto card = [&](int k, const char* id, const char* glyph, const std::string& label, const std::string& sub, float fill,
+    auto card = [&](const char* id, const char* glyph, const std::string& label, const std::string& sub, float fill,
                     bool warn) {
-        float x = origin.x + pad + (k % cols) * (cardW + gap);
-        float cy = y + (k / cols) * (cardH + rowGap);
+        float x = origin.x + pad, cy = y;
+        y += cardH + rowGap;
         ImGui::SetCursorScreenPos(ImVec2(x, cy));
         bool hit = ImGui::InvisibleButton(id, ImVec2(cardW, cardH));
         bool hov = ImGui::IsItemHovered();
@@ -1311,7 +1340,72 @@ void App::drawHome() {
         }
         return hit;
     };
-    auto sectionEnd = [&](int n) { y += ((n + cols - 1) / cols) * (cardH + rowGap) + 14 * s; };
+    // links draws the most used folders under root (but not skip), indented
+    // under the row above: name, then where it is, muted. Right-click to
+    // hide one.
+    auto links = [&](const std::wstring& root, const std::wstring& skip) {
+        auto top = TopUses(uses_, root, 4, int64_t(time(nullptr)));
+        int shown = 0;
+        float x = origin.x + pad + 38 * s, w = cardW - 38 * s, h = std::round(24 * s);
+        for (size_t i = 0; i < top.size() && shown < 3; i++) {
+            const Use& u = top[i];
+            if (!skip.empty() && SamePath(u.path, skip)) continue;
+            shown++;
+            ImGui::PushID(Narrow(u.path).c_str());
+            ImGui::SetCursorScreenPos(ImVec2(x, y));
+            bool hit = ImGui::InvisibleButton("##use", ImVec2(w, h));
+            bool hov = ImGui::IsItemHovered();
+            if (hov) dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), U32(p.surface2), 5 * s);
+            float mid = y + h / 2;
+            ImGui::PushFont(nullptr, 14);
+            DrawCentred(dl, ImVec2(x + 12 * s, mid), icon::Folder, U32(hov ? p.accent : p.muted));
+            ImGui::PopFont();
+            float tx = x + 26 * s, tw = w - 26 * s - 8 * s;
+            std::string name = Narrow(BaseName(u.path));
+            std::wstring parent = Parent(u.path);
+            std::string where = IsLinux(u.path) ? Narrow(ToLinux(parent)) : Narrow(parent);
+            ImGui::PushFont(nullptr, 0);
+            std::string shownName = ellipsis(name, tw);
+            float nw = ImGui::CalcTextSize(shownName.c_str()).x;
+            dl->AddText(ImVec2(tx, TextTop(mid)), U32(hov ? p.accent : p.text), shownName.c_str());
+            ImGui::PopFont();
+            float rest = tw - nw - 10 * s;
+            if (rest > 40 * s) {
+                ImGui::PushFont(nullptr, kSmall);
+                dl->AddText(ImVec2(tx + nw + 10 * s, TextTop(mid)), U32(p.muted), ellipsis(where, rest).c_str());
+                ImGui::PopFont();
+            }
+            if (hit) Navigate(u.path);
+            if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##usemenu");
+            if (ImGui::BeginPopup("##usemenu")) {
+                if (ImGui::MenuItem("Open")) Navigate(u.path);
+                if (ImGui::MenuItem("Pin to sidebar", nullptr, false, !pinned(u.path))) pin(u.path);
+                ImGui::Separator();
+                if (ImGui::MenuItem("Hide from This PC")) {
+                    hiddenUses_.push_back(u.path);
+                    ForgetUse(uses_, u.path);
+                    Save();
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::PopID();
+            y += h;
+        }
+        if (shown) y += 6 * s;
+    };
+    // unhideMenu is a drive's "Show hidden folders", when it has any.
+    auto unhideItem = [&](const std::wstring& root) {
+        size_t n = std::count_if(hiddenUses_.begin(), hiddenUses_.end(),
+                                 [&](const std::wstring& h) { return SamePath(Root(h), root); });
+        if (!n) return;
+        std::string label = "Show " + std::to_string(n) + " hidden folder" + (n == 1 ? "" : "s");
+        if (ImGui::MenuItem(label.c_str())) {
+            hiddenUses_.erase(std::remove_if(hiddenUses_.begin(), hiddenUses_.end(),
+                                             [&](const std::wstring& h) { return SamePath(Root(h), root); }),
+                              hiddenUses_.end());
+            Save();
+        }
+    };
 
     heading("Drives");
     for (int i = 0; i < int(drives_.size()); i++) {
@@ -1319,34 +1413,44 @@ void App::drawHome() {
         std::string sub = d.total ? FormatSize(d.free) + " free of " + FormatSize(d.total) : "Not ready";
         float fill = d.total ? 1.0f - float(double(d.free) / double(d.total)) : -1;
         ImGui::PushID(i);
-        if (card(i, "##drive", driveIcon(d.type), d.label, sub, fill, d.total && d.free < d.total / 10)) Navigate(d.root);
+        if (card("##drive", driveIcon(d.type), d.label, sub, fill, d.total && d.free < d.total / 10)) Navigate(d.root);
         if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##drivemenu");
         if (ImGui::BeginPopup("##drivemenu")) {
             if (ImGui::MenuItem("Open")) Navigate(d.root);
             if (ImGui::MenuItem("Pin to sidebar", nullptr, false, !pinned(d.root))) pin(d.root);
             if (ImGui::MenuItem("Properties")) Properties(hwnd_, {d.root});
+            unhideItem(d.root);
             ImGui::EndPopup();
         }
+        links(d.root, L"");
         ImGui::PopID();
     }
     if (drives_.empty()) {
         ImGui::PushFont(nullptr, kSmall);
         dl->AddText(ImVec2(origin.x + pad, y), U32(p.muted), "Looking\xE2\x80\xA6");
         ImGui::PopFont();
+        y += cardH;
     }
-    sectionEnd(std::max(1, int(drives_.size())));
+    y += 12 * s;
 
     if (!distros_.empty()) {
         heading("Linux");
-        int k = 0;
         for (size_t i = 0; i < distros_.size(); i++) {
             const Distro& d = distros_[i];
             ImGui::PushID(int(100 + i));
             std::string home = d.uid == 0 ? "/root" : "your home";
-            if (card(k++, "##home", icon::Home, Narrow(d.name), home, -1, false)) Navigate(DistroHome(d));
+            std::wstring root = FromLinux(L"/", d.name), homePath = d.uid == 0 ? FromLinux(L"/root", d.name) : L"";
+            if (card("##home", icon::Home, Narrow(d.name), home, -1, false)) Navigate(DistroHome(d));
+            if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##distromenu");
+            if (ImGui::BeginPopup("##distromenu")) {
+                if (ImGui::MenuItem("Open")) Navigate(DistroHome(d));
+                if (ImGui::MenuItem("Open /")) Navigate(root);
+                unhideItem(root);
+                ImGui::EndPopup();
+            }
+            links(root, homePath);
             ImGui::PopID();
         }
-        sectionEnd(k);
     }
     ImGui::SetCursorScreenPos(ImVec2(origin.x, y));
     ImGui::Dummy(ImVec2(1, 1));

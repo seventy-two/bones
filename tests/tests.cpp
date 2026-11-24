@@ -195,6 +195,31 @@ static void testKinds() {
     CHECK(!OwnIcon(L".txt"));
 }
 
+static void testUses() {
+    std::vector<Use> u;
+    const int64_t day = 86400, t = 1000 * day;
+    RecordUse(u, L"C:\\", t);  // roots aren't counted
+    CHECK(u.empty());
+    RecordUse(u, L"C:\\a", t);
+    RecordUse(u, L"c:\\A\\", t);  // the same folder
+    CHECK(u.size() == 1 && u[0].count == 2);
+    RecordUse(u, L"C:\\b", t);
+    RecordUse(u, L"D:\\x", t);
+    RecordUse(u, L"\\\\wsl.localhost\\Debian\\root\\go", t);
+    auto top = TopUses(u, L"C:\\", 3, t);
+    CHECK(top.size() == 2 && top[0].path == L"C:\\a" && top[1].path == L"C:\\b");
+    CHECK(TopUses(u, L"D:\\", 3, t).size() == 1);
+    CHECK(TopUses(u, L"\\\\wsl.localhost\\Debian\\", 3, t).size() == 1);
+    // Old visits fade: three visits two months ago lose to one today.
+    std::vector<Use> v = {{L"C:\\old", 3, t - 60 * day}, {L"C:\\new", 1, t}};
+    CHECK(TopUses(v, L"C:\\", 1, t)[0].path == L"C:\\new");
+    // Full: the weakest goes.
+    RecordUse(v, L"C:\\third", t, 2);
+    CHECK(v.size() == 2 && TopUses(v, L"C:\\", 2, t)[1].path == L"C:\\third");
+    ForgetUse(v, L"c:\\NEW");
+    CHECK(v.size() == 1);
+}
+
 int main() {
     testNatural();
     testOrder();
@@ -204,6 +229,7 @@ int main() {
     testUnique();
     testFormat();
     testKinds();
+    testUses();
     testMediaHeavy();
     if (failures) {
         std::printf("%d failed\n", failures);

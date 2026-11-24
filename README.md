@@ -4,8 +4,13 @@ A plain file browser for Windows: drives, pinned folders and your WSL home
 down the side, and a folder as thumbnails or as details. None of
 Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
 
-- **This PC** is where it opens (unless given a folder): a card for each
-  drive with its free space, and the default WSL distro's home. It's at
+- **This PC** is where it opens (unless given a folder): a list of the
+  drives with their free space and the default WSL distro's home, each
+  with its three most used folders under it. A visit counts once you've
+  stayed 2 seconds (so folders you click through don't), and old visits
+  fade by half every two weeks. Right-click a folder there to hide it
+  (it's no longer counted); a drive's right-click menu shows hidden ones
+  again. It's at
   the top of the sidebar, the first step of the path bar, and Up from a
   drive.
 - **Sidebar**: pinned folders (+ pins where you are, drag to reorder,
