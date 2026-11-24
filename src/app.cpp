@@ -1257,8 +1257,9 @@ void App::drawHome() {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float pad = 24 * s, gap = 10 * s, rowGap = 2 * s;
     float avail = ImGui::GetContentRegionAvail().x - pad * 2;
-    int cols = std::max(1, int((avail + gap) / (300 * s + gap)));
-    float cardW = std::min((avail - gap * (cols - 1)) / cols, 380 * s), cardH = std::round(50 * s);
+    // One column: drives read top to bottom, like a list.
+    int cols = 1;
+    float cardW = std::min(avail, 520 * s), cardH = std::round(50 * s);
     ImVec2 origin = ImGui::GetCursorScreenPos();
     float y = origin.y + pad;
 
