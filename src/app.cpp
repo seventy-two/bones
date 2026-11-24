@@ -1965,9 +1965,7 @@ void App::drawStatus() {
     char buf[256];
     if (cur_.empty()) {
         snprintf(buf, sizeof buf, "%zu drive%s", drives_.size(), drives_.size() == 1 ? "" : "s");
-        std::string left = buf;
-        if (!distros_.empty()) left += "   \xC2\xB7   " + Narrow(distros_[0].name);
-        dl->AddText(ImVec2(a.x + 12 * s, y), U32(p.muted), left.c_str());
+        dl->AddText(ImVec2(a.x + 12 * s, y), U32(p.muted), buf);
         ImGui::PopFont();
         ImGui::Dummy(ImVec2(w, h));
         return;
