@@ -150,8 +150,6 @@ void App::load() {
         for (auto& k : KnownPlaces())
             if (k.label != "Music") pins_.push_back({k.label, k.path});
     }
-    std::string last = j.value("last", "");
-    if (!last.empty()) cur_ = Widen(last);  // main navigates there
 }
 
 void App::Save() {
@@ -162,7 +160,6 @@ void App::Save() {
     j["sortDescending"] = sort_.descending;
     j["foldersFirst"] = sort_.foldersFirst;
     j["hidden"] = showHidden_;
-    j["last"] = Narrow(cur_);
     j["pins"] = json::array();
     for (auto& p : pins_) j["pins"].push_back({{"label", p.label}, {"path", Narrow(p.path)}});
     WINDOWPLACEMENT wp{sizeof(wp)};
@@ -188,19 +185,13 @@ bool App::Placement(RECT& r, bool& maximised) {
 
 // ---- navigating and listing ----
 
-void App::Start(const std::wstring& path) {
-    std::wstring last = cur_;
-    cur_.clear();
-    std::wstring first = !path.empty() ? path : !last.empty() && IsDir(last) ? last : HomeDir();
-    go(first, false, L"", -1);
-}
+void App::Start(const std::wstring& path) { go(path, false, L"", -1); }
 
 void App::Navigate(std::wstring path, bool record) { go(std::move(path), record, L"", -1); }
 
 void App::go(std::wstring path, bool record, std::wstring focus, float scroll) {
-    path = Normalise(path);
-    if (path.empty()) return;
-    if (record && !cur_.empty() && !SamePath(path, cur_)) {
+    path = Normalise(path);  // "" is This PC
+    if (record && started_ && !SamePath(path, cur_)) {
         std::wstring f = focus_ >= 0 && focus_ < int(view_.size()) ? at(focus_).name : L"";
         back_.push_back({cur_, f, scrollY_});
         fwd_.clear();
@@ -219,6 +210,14 @@ void App::go(std::wstring path, bool record, std::wstring focus, float scroll) {
     rebuild();
     listError_.clear();
     thumbs_->Drop();
+    started_ = true;
+    loading_ = false;
+    if (cur_.empty()) {
+        watcher_.Stop();
+        gen_++;  // a listing still on its way is for somewhere else
+        DrivesChanged();
+        return;
+    }
     watcher_.Watch(cur_);
     list(false);
 }
@@ -242,11 +241,16 @@ void App::Forward() {
 }
 
 void App::up() {
-    std::wstring parent = Parent(cur_);
-    if (!parent.empty()) go(parent, true, BaseName(cur_), -1);
+    if (cur_.empty()) return;
+    // Up from a drive (or a distro) is This PC.
+    go(Parent(cur_), true, BaseName(cur_), -1);
 }
 
 void App::list(bool quiet) {
+    if (cur_.empty()) {  // This PC: just the drives again
+        DrivesChanged();
+        return;
+    }
     int gen = ++gen_;
     if (!quiet) {
         loading_ = true;
@@ -562,7 +566,8 @@ void App::recycle(bool permanently) {
 
 void App::copyPaths(bool linux) {
     auto paths = selectedPaths();
-    if (paths.empty()) paths.push_back(cur_);
+    if (paths.empty() && !cur_.empty()) paths.push_back(cur_);
+    if (paths.empty()) return;
     std::wstring text;
     for (auto& p : paths) {
         if (!text.empty()) text += L"\r\n";
@@ -579,7 +584,7 @@ bool App::pinned(const std::wstring& path) const {
 }
 
 void App::pin(const std::wstring& path) {
-    if (pinned(path)) return;
+    if (path.empty() || pinned(path)) return;
     std::wstring name = BaseName(path);
     if (IsRoot(path)) {
         auto crumbs = Crumbs(path);
@@ -654,9 +659,12 @@ void App::Frame() {
     ImGui::SameLine(0, 0);
 
     ImGui::BeginChild("body", ImVec2(0, bodyH), 0, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    if (thumbView_) drawGrid();
-    else drawDetails();
-    drawEmpty();
+    if (cur_.empty()) drawHome();
+    else {
+        if (thumbView_) drawGrid();
+        else drawDetails();
+        drawEmpty();
+    }
     ImGui::EndChild();
 
     drawStatus();
@@ -735,7 +743,7 @@ void App::drawToolbar() {
     x += ctrl + 2 * s;
     if (iconButton("##fwd", icon::Forward, "Forward (Alt+Right)", !fwd_.empty(), ImVec2(x, y0), sq)) Forward();
     x += ctrl + 2 * s;
-    if (iconButton("##up", icon::Up, "Up (Backspace)", !Parent(cur_).empty(), ImVec2(x, y0), sq)) up();
+    if (iconButton("##up", icon::Up, "Up (Backspace)", !cur_.empty(), ImVec2(x, y0), sq)) up();
     x += ctrl + 2 * s;
     if (iconButton("##refresh", icon::Refresh, "Refresh (F5)", true, ImVec2(x, y0), sq)) refresh();
     x += ctrl + 10 * s;
@@ -747,7 +755,8 @@ void App::drawToolbar() {
     float rx = right - 10 * s - viewW;
     float viewX = rx;
     float sliderX = 0, sortX = 0;
-    if (thumbView_) {
+    bool tiles = thumbView_ && !cur_.empty();
+    if (tiles) {
         rx -= gap + sliderW;
         sliderX = rx;
         rx -= gap + sortW;
@@ -768,7 +777,10 @@ void App::drawToolbar() {
             ImGui::SetKeyboardFocusHere();
             focusFilter_ = false;
         }
-        if (ImGui::InputTextWithHint("##filter", "Filter", filter_, sizeof filter_)) {
+        ImGui::BeginDisabled(cur_.empty());
+        bool typed = ImGui::InputTextWithHint("##filter", "Filter", filter_, sizeof filter_);
+        ImGui::EndDisabled();
+        if (typed) {
             rebuild();
             if (!view_.empty() && filter_[0]) focusOn(0, false);
         }
@@ -782,7 +794,7 @@ void App::drawToolbar() {
         DrawCentred(dl, ImVec2(filterX + 17 * s, mid), icon::Search, U32(focused || filter_[0] ? p.text : p.muted));
     }
 
-    if (thumbView_) {
+    if (tiles) {
         // Sort: a button that opens its menu.
         ImGui::SetCursorScreenPos(ImVec2(sortX, y0));
         if (ImGui::InvisibleButton("##sort", ImVec2(sortW, ctrl))) ImGui::OpenPopup("##sortmenu");
@@ -915,6 +927,7 @@ void App::drawCrumbs(ImVec2 at, float width, float h) {
     dl->AddRectFilled(at, ImVec2(at.x + width, at.y + h), U32(p.surface2), 6 * s);
 
     auto crumbs = Crumbs(cur_);
+    crumbs.insert(crumbs.begin(), Crumb{L"This PC", L""});
     const char* sep = "\xE2\x80\xBA";  // ›
     float sepW = 18 * s;
     float pad = 8 * s;
@@ -927,7 +940,7 @@ void App::drawCrumbs(ImVec2 at, float width, float h) {
         if (last) ImGui::PushFont(fonts_.semibold, 0);
         float w = ImGui::CalcTextSize(l.c_str()).x + pad * 2;
         if (last) ImGui::PopFont();
-        if (i == 0 && IsLinux(cur_)) w += 22 * s;  // the penguin's stand-in
+        if (i == 0 || (i == 1 && IsLinux(cur_))) w += 22 * s;  // room for an icon
         widths.push_back(w);
     }
     // Fit from the end; the rest go behind "…".
@@ -965,8 +978,8 @@ void App::drawCrumbs(ImVec2 at, float width, float h) {
         bool last = i + 1 == crumbs.size();
         if (crumb("##c", widths[i])) Navigate(crumbs[i].path);
         float tx = x + pad;
-        if (i == 0 && IsLinux(cur_)) {
-            DrawCentred(dl, ImVec2(tx + 8 * s, mid), icon::Linux, U32(p.muted));
+        if (i == 0 || (i == 1 && IsLinux(cur_))) {
+            DrawCentred(dl, ImVec2(tx + 8 * s, mid), i == 0 ? icon::Pc : icon::Linux, U32(last ? p.text : p.muted));
             tx += 22 * s;
         }
         if (last) ImGui::PushFont(fonts_.semibold, 0);
@@ -1012,7 +1025,7 @@ void App::goTo(const std::string& typed) {
 }
 
 bool App::sideItem(const char* icon, const std::string& label, const std::wstring& path, const char* sub, float fill,
-                   bool warn) {
+                   bool warn, bool isHome) {
     const Palette& p = Colours();
     float s = scale_;
     float w = ImGui::GetContentRegionAvail().x;
@@ -1021,7 +1034,7 @@ bool App::sideItem(const char* icon, const std::string& label, const std::wstrin
     ImVec2 a = ImGui::GetCursorScreenPos();
     bool hit = ImGui::InvisibleButton("##item", ImVec2(w, h));
     bool hovered = ImGui::IsItemHovered();
-    bool here = !path.empty() && SamePath(path, cur_);
+    bool here = path.empty() ? isHome && cur_.empty() : SamePath(path, cur_);
     ImDrawList* dl = ImGui::GetWindowDrawList();
     if (here || hovered)
         dl->AddRectFilled(a, ImVec2(a.x + w, a.y + h), U32(here ? p.accentLo : p.surface2), 6 * s);
@@ -1070,6 +1083,10 @@ void App::drawSidebar() {
     ImGui::BeginChild("sideinner", ImVec2(width, 0), 0);
 
     // Pinned, with + to pin where we are.
+    ImGui::Dummy(ImVec2(0, 2 * s));
+    ImGui::PushID("thispc");
+    if (sideItem(icon::Pc, "This PC", L"", nullptr, -1, false, true)) Navigate(L"");
+    ImGui::PopID();
     float headMid = heading("PINNED");
     {
         // + sits level with the heading's letters.
@@ -1189,6 +1206,100 @@ void App::drawSidebar() {
         }
         ImGui::EndPopup();
     }
+}
+
+// drawHome is This PC: a card for each drive and each Linux distro.
+void App::drawHome() {
+    const Palette& p = Colours();
+    float s = scale_;
+    ImGui::BeginChild("home", ImVec2(0, 0), 0);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float pad = 28 * s, gap = 14 * s;
+    float avail = ImGui::GetContentRegionAvail().x - pad * 2;
+    int cols = std::max(1, int((avail + gap) / (290 * s + gap)));
+    float cardW = std::min((avail - gap * (cols - 1)) / cols, 420 * s), cardH = std::round(78 * s);
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    float y = origin.y + pad;
+
+    auto heading = [&](const char* text) {
+        ImGui::PushFont(fonts_.semibold, kTitle);
+        dl->AddText(ImVec2(origin.x + pad, y), U32(p.text), text);
+        y += ImGui::GetTextLineHeight() + 12 * s;
+        ImGui::PopFont();
+    };
+    // card draws one, at index k of its section; true when clicked.
+    auto card = [&](int k, const char* id, const char* glyph, const std::string& label, const std::string& sub, float fill,
+                    bool warn) {
+        float x = origin.x + pad + (k % cols) * (cardW + gap);
+        float cy = y + (k / cols) * (cardH + gap);
+        ImGui::SetCursorScreenPos(ImVec2(x, cy));
+        bool hit = ImGui::InvisibleButton(id, ImVec2(cardW, cardH));
+        bool hov = ImGui::IsItemHovered();
+        ImVec2 a(x, cy), b(x + cardW, cy + cardH);
+        dl->AddRectFilled(a, b, U32(hov ? p.surface2 : p.surface), 10 * s);
+        dl->AddRect(a, b, U32(hov ? p.accent : p.border, hov ? 0.6f : 1.0f), 10 * s);
+        ImGui::PushFont(nullptr, 30);
+        DrawCentred(dl, ImVec2(x + 40 * s, cy + cardH / 2), glyph, U32(hov ? p.accent : p.muted));
+        ImGui::PopFont();
+        float tx = x + 76 * s, tw = cardW - 76 * s - 18 * s;
+        ImGui::PushFont(fonts_.semibold, 0);
+        float lineMid = cy + (fill >= 0 ? 22 : 28) * s;
+        dl->AddText(ImVec2(tx, TextTop(lineMid)), U32(p.text), ellipsis(label, tw).c_str());
+        ImGui::PopFont();
+        float by = lineMid + 13 * s;
+        if (fill >= 0) {
+            dl->AddRectFilled(ImVec2(tx, by), ImVec2(tx + tw, by + 6 * s), U32(p.border), 3 * s);
+            dl->AddRectFilled(ImVec2(tx, by), ImVec2(tx + tw * std::clamp(fill, 0.0f, 1.0f), by + 6 * s),
+                              U32(warn ? p.bad : p.accent), 3 * s);
+            by += 12 * s;
+        }
+        ImGui::PushFont(nullptr, kSmall);
+        dl->AddText(ImVec2(tx, by), U32(p.muted), ellipsis(sub, tw).c_str());
+        ImGui::PopFont();
+        return hit;
+    };
+    auto sectionEnd = [&](int n) { y += ((n + cols - 1) / cols) * (cardH + gap) + 18 * s; };
+
+    heading("Drives");
+    for (int i = 0; i < int(drives_.size()); i++) {
+        const Drive& d = drives_[i];
+        std::string sub = d.total ? FormatSize(d.free) + " free of " + FormatSize(d.total) : "Not ready";
+        float fill = d.total ? 1.0f - float(double(d.free) / double(d.total)) : -1;
+        ImGui::PushID(i);
+        if (card(i, "##drive", driveIcon(d.type), d.label, sub, fill, d.total && d.free < d.total / 10)) Navigate(d.root);
+        if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##drivemenu");
+        if (ImGui::BeginPopup("##drivemenu")) {
+            if (ImGui::MenuItem("Open")) Navigate(d.root);
+            if (ImGui::MenuItem("Pin to sidebar", nullptr, false, !pinned(d.root))) pin(d.root);
+            if (ImGui::MenuItem("Properties")) Properties(hwnd_, {d.root});
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+    }
+    if (drives_.empty()) {
+        ImGui::PushFont(nullptr, kSmall);
+        dl->AddText(ImVec2(origin.x + pad, y), U32(p.muted), "Looking\xE2\x80\xA6");
+        ImGui::PopFont();
+    }
+    sectionEnd(std::max(1, int(drives_.size())));
+
+    if (!distros_.empty()) {
+        heading("Linux");
+        int k = 0;
+        for (size_t i = 0; i < distros_.size(); i++) {
+            const Distro& d = distros_[i];
+            ImGui::PushID(int(100 + i));
+            std::string name = Narrow(d.name) + (d.isDefault ? "  (default)" : "");
+            if (card(k++, "##root", icon::Linux, name, "/", -1, false)) Navigate(FromLinux(L"/", d.name));
+            std::string home = d.uid == 0 ? "/root" : "your home";
+            if (card(k++, "##home", icon::Home, Narrow(d.name) + " home", home, -1, false)) Navigate(DistroHome(d));
+            ImGui::PopID();
+        }
+        sectionEnd(k);
+    }
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, y));
+    ImGui::Dummy(ImVec2(1, 1));
+    ImGui::EndChild();
 }
 
 void App::drawFolder(int vi, const Entry& e, ImVec2 p0, ImVec2 p1, int order, bool previews) {
@@ -1646,6 +1757,15 @@ void App::drawStatus() {
     float y = TextTop(a.y + h / 2);
 
     char buf[256];
+    if (cur_.empty()) {
+        snprintf(buf, sizeof buf, "%zu drive%s", drives_.size(), drives_.size() == 1 ? "" : "s");
+        std::string left = buf;
+        if (!distros_.empty()) left += "   \xC2\xB7   " + std::to_string(distros_.size()) + " Linux distro" + (distros_.size() == 1 ? "" : "s");
+        dl->AddText(ImVec2(a.x + 12 * s, y), U32(p.muted), left.c_str());
+        ImGui::PopFont();
+        ImGui::Dummy(ImVec2(w, h));
+        return;
+    }
     size_t total = 0;
     for (auto& e : entries_)
         if (!hidden(e)) total++;

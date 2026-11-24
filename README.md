@@ -4,6 +4,10 @@ A plain file browser for Windows: drives, pinned folders and WSL distros
 down the side, and a folder as thumbnails or as details. None of
 Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
 
+- **This PC** is where it opens (unless given a folder): a card for each
+  drive with its free space, and each WSL distro's root and home. It's at
+  the top of the sidebar, the first step of the path bar, and Up from a
+  drive.
 - **Sidebar**: pinned folders (+ pins where you are, drag to reorder,
   right-click to move or unpin), every drive with its free space, and
   each WSL distro with its root and home (read from the registry, so a

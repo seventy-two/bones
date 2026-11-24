@@ -18,6 +18,7 @@ struct Fonts {
 constexpr float kBody = 15, kSmall = 13, kTitle = 17;
 
 namespace icon {
+inline constexpr const char* Pc = "\xEE\xA5\xB7";  // U+E977 PC1
 inline constexpr const char* Close = "\xEE\xA2\xBB";  // U+E8BB
 inline constexpr const char* Restore = "\xEE\xA4\xA3";  // U+E923
 inline constexpr const char* Maximise = "\xEE\xA4\xA2";  // U+E922

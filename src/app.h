@@ -99,7 +99,8 @@ private:
     void goTo(const std::string& typed);
     void drawSidebar();
     bool sideItem(const char* icon, const std::string& label, const std::wstring& path, const char* sub = nullptr,
-                  float fill = -1, bool warn = false);
+                  float fill = -1, bool warn = false, bool isHome = false);
+    void drawHome();
     void drawGrid();
     void drawDetails();
     void drawStatus();
@@ -139,8 +140,9 @@ private:
     Fonts fonts_;
     float scale_ = 1;
 
-    // Where we are.
+    // Where we are ("" is This PC).
     std::wstring cur_;
+    bool started_ = false;
     std::vector<Visit> back_, fwd_;
     std::wstring arriveFocus_;  // select this once the listing arrives
     float arriveScroll_ = -1;
