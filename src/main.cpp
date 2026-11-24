@@ -12,6 +12,7 @@
 #include <dbt.h>
 #include <dwmapi.h>
 #include <shellapi.h>
+#include <windowsx.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -105,6 +106,34 @@ void renderFrame() {
     rendering = false;
 }
 
+// hitTest: there's no frame, so a band inside the edges resizes and the
+// title bar's empty parts drag the window.
+LRESULT hitTest(HWND h, LPARAM lParam) {
+    POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+    ScreenToClient(h, &pt);
+    if (!IsZoomed(h)) {
+        RECT rc;
+        GetClientRect(h, &rc);
+        UINT dpi = GetDpiForWindow(h);
+        int band = GetSystemMetricsForDpi(SM_CXFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+        int corner = band * 2;
+        bool left = pt.x < band, right = pt.x >= rc.right - band;
+        bool top = pt.y < band, bottom = pt.y >= rc.bottom - band;
+        bool nearLeft = pt.x < corner, nearRight = pt.x >= rc.right - corner;
+        bool nearTop = pt.y < corner, nearBottom = pt.y >= rc.bottom - corner;
+        if ((top && nearLeft) || (left && nearTop)) return HTTOPLEFT;
+        if ((top && nearRight) || (right && nearTop)) return HTTOPRIGHT;
+        if ((bottom && nearLeft) || (left && nearBottom)) return HTBOTTOMLEFT;
+        if ((bottom && nearRight) || (right && nearBottom)) return HTBOTTOMRIGHT;
+        if (top) return HTTOP;
+        if (bottom) return HTBOTTOM;
+        if (left) return HTLEFT;
+        if (right) return HTRIGHT;
+    }
+    if (app && app->InCaption(float(pt.x), float(pt.y))) return HTCAPTION;
+    return HTCLIENT;
+}
+
 LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wParam, LPARAM lParam) {
     // Explorer's own menu draws some of its items through us.
     if (msg == WM_INITMENUPOPUP || msg == WM_DRAWITEM || msg == WM_MEASUREITEM || msg == WM_MENUCHAR) {
@@ -113,6 +142,25 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     if (ImGui_ImplWin32_WndProcHandler(h, msg, wParam, lParam)) return true;
     switch (msg) {
+    case WM_NCCALCSIZE:
+        if (wParam) {
+            // No frame: all client area, keeping the frame's styles so it
+            // still resizes, snaps and has a shadow.
+            auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(lParam);
+            if (IsZoomed(h)) {
+                // Maximised, it hangs over the screen edges by its frame
+                // width: inset it by that on every side.
+                RECT before = params->rgrc[0];
+                DefWindowProcW(h, msg, wParam, lParam);
+                params->rgrc[0].top = before.top + (params->rgrc[0].left - before.left);
+            }
+            return 0;
+        }
+        break;
+    case WM_NCHITTEST: return hitTest(h, lParam);
+    case WM_ACTIVATE:
+        framesWanted = 2;  // the title dims when it's not in front
+        break;
     case WM_SIZE:
         if (wParam != SIZE_MINIMIZED) {
             resizeW = LOWORD(lParam);
@@ -249,6 +297,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         wp.showCmd = SW_HIDE;
         SetWindowPlacement(hwnd, &wp);
     }
+    // A sliver of DWM frame under the client area keeps the shadow; the
+    // app paints over it. Then recalculate the frame without its border.
+    MARGINS margins{0, 0, 0, 1};
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
     if (!createDevice()) {

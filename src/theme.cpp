@@ -1,7 +1,12 @@
 #include "theme.h"
 
+#include "imgui_internal.h"  // ImTextCharFromUtf8
+
 #include <windows.h>
 
+#include <algorithm>
+#include <cfloat>
+#include <cmath>
 #include <fstream>
 #include <map>
 #include <string>
@@ -122,7 +127,11 @@ Fonts LoadFonts() {
     if (!exists(iconFont)) iconFont = fontPath("segmdl2.ttf");
     std::string symbols = fontPath("seguisym.ttf");
     auto add = [&](const char* file) -> ImFont* {
-        ImFont* f = addFont(fontPath(file), ImFontConfig());
+        // Segoe UI's line box has more room above the letters than
+        // below, so text drawn in a box sits low; lift it 2 px (at 15 px).
+        ImFontConfig text;
+        text.GlyphOffset = ImVec2(0, -2);
+        ImFont* f = addFont(fontPath(file), text);
         if (!f) return io.Fonts->AddFontDefault();
         ImFontConfig merge;
         merge.MergeMode = true;
@@ -139,6 +148,39 @@ Fonts LoadFonts() {
     f.semibold = add("seguisb.ttf");
     io.FontDefault = f.regular;
     return f;
+}
+
+ImVec4 InkBounds(const char* s) {
+    ImFontBaked* baked = ImGui::GetFontBaked();
+    float x = 0;
+    ImVec4 r(FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX);
+    for (const char* p = s; *p;) {
+        unsigned int c = 0;
+        p += ImTextCharFromUtf8(&c, p, nullptr);
+        const ImFontGlyph* g = baked->FindGlyph(ImWchar(c));
+        if (!g) continue;
+        if (g->Visible) {
+            r.x = std::min(r.x, x + g->X0);
+            r.y = std::min(r.y, g->Y0);
+            r.z = std::max(r.z, x + g->X1);
+            r.w = std::max(r.w, g->Y1);
+        }
+        x += g->AdvanceX;
+    }
+    if (r.x > r.z) r = ImVec4(0, 0, x, ImGui::GetFontSize());
+    return r;
+}
+
+void DrawCentred(ImDrawList* dl, ImVec2 centre, const char* s, ImU32 col) {
+    ImVec4 b = InkBounds(s);
+    dl->AddText(ImVec2(std::round(centre.x - (b.x + b.z) / 2), std::round(centre.y - (b.y + b.w) / 2)), col, s);
+}
+
+float TextTop(float centreY) {
+    // Centre the capitals: from the top of an H to the baseline.
+    const ImFontGlyph* g = ImGui::GetFontBaked()->FindGlyph('H');
+    float mid = g ? (g->Y0 + g->Y1) / 2 : ImGui::GetFontSize() / 2;
+    return std::round(centreY - mid);
 }
 
 }  // namespace shelf

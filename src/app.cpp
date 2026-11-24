@@ -640,8 +640,8 @@ void App::Frame() {
                      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollWithMouse);
 
     drawToolbar();
-    float statusH = ImGui::GetTextLineHeight() + 12 * scale_;
-    float bodyH = ImGui::GetContentRegionAvail().y - statusH;
+    float statusH = std::round(ImGui::GetTextLineHeight() + 12 * scale_);
+    float bodyH = ImGui::GetWindowPos().y + ImGui::GetWindowHeight() - statusH - ImGui::GetCursorScreenPos().y;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, p.surface);
     ImGui::BeginChild("side", ImVec2(230 * scale_, bodyH), 0);
@@ -673,198 +673,334 @@ void App::Frame() {
     ImGui::End();
 }
 
+// ---- the title bar: name, navigation, path, filter, sort, size, view,
+// window buttons. Its empty parts drag the window (see InCaption).
+
+bool App::InCaption(float x, float y) const {
+    if (y >= captionH_) return false;
+    for (const auto& r : noDrag_)
+        if (x >= r.first.x && y >= r.first.y && x < r.second.x && y < r.second.y) return false;
+    return true;
+}
+
+bool App::iconButton(const char* id, const char* icon, const char* tip, bool enabled, ImVec2 at, ImVec2 size, bool on) {
+    const Palette& p = Colours();
+    ImGui::SetCursorScreenPos(at);
+    ImGui::BeginDisabled(!enabled);
+    bool hit = ImGui::InvisibleButton(id, size);
+    ImGui::EndDisabled();
+    bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
+    noDrag_.push_back({at, ImVec2(at.x + size.x, at.y + size.y)});
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 b(at.x + size.x, at.y + size.y);
+    if (on) dl->AddRectFilled(at, b, U32(p.chip), 6 * scale_);
+    else if (hovered && enabled) dl->AddRectFilled(at, b, U32(ImGui::IsItemActive() ? p.border : p.surface2), 6 * scale_);
+    ImVec4 col = !enabled ? p.border : on || hovered ? p.text : p.muted;
+    DrawCentred(dl, ImVec2(at.x + size.x / 2, at.y + size.y / 2), icon, U32(col));
+    if (hovered && tip) {
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("%s", tip);
+    }
+    return hit && enabled;
+}
+
 void App::drawToolbar() {
     const Palette& p = Colours();
     float s = scale_;
-    ImGui::SetCursorPos(ImVec2(10 * s, 8 * s));
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    float bh = ImGui::GetFrameHeight();
-    auto tool = [&](const char* icon, const char* tip, bool enabled) {
-        ImGui::BeginDisabled(!enabled);
-        bool hit = ImGui::Button(icon, ImVec2(bh, bh));
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("%s", tip);
-        ImGui::SameLine(0, 2 * s);
-        return hit;
-    };
-    if (tool(icon::Back, "Back (Alt+Left)", !back_.empty())) Back();
-    if (tool(icon::Forward, "Forward (Alt+Right)", !fwd_.empty())) Forward();
-    if (tool(icon::Up, "Up (Backspace)", !Parent(cur_).empty())) up();
-    if (tool(icon::Refresh, "Refresh (F5)", true)) refresh();
-    ImGui::PopStyleColor();
-    ImGui::SameLine(0, 8 * s);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 origin = ImGui::GetWindowPos();
+    float W = ImGui::GetWindowWidth();
+    captionH_ = std::round(46 * s);
+    noDrag_.clear();
+    float ctrl = std::round(30 * s);
+    float y0 = origin.y + std::round((captionH_ - ctrl) / 2);
+    float mid = y0 + ctrl / 2;
+    bool active = GetForegroundWindow() == hwnd_;
 
-    float right = ImGui::GetWindowWidth() - 10 * s;
-    float filterW = 210 * s;
-    float toggleW = bh * 2 + 2 * s;
-    float extraW = thumbView_ ? 110 * s + 150 * s : 0;  // tile size and sort
-    float crumbsW = right - ImGui::GetCursorPosX() - filterW - toggleW - extraW - 24 * s;
-    drawCrumbs(std::max(crumbsW, 120 * s));
-    ImGui::SameLine(0, 8 * s);
+    // Windows 10 draws no line along the top of a frameless window.
+    if (!IsZoomed(hwnd_)) ImGui::GetBackgroundDrawList()->AddLine(ImVec2(0, 0.5f), ImVec2(W, 0.5f), U32(p.border));
 
-    // Filter.
-    ImGui::SetNextItemWidth(filterW);
-    if (focusFilter_) {
-        ImGui::SetKeyboardFocusHere();
-        focusFilter_ = false;
+    // The name.
+    float x = origin.x + 16 * s;
+    ImGui::PushFont(fonts_.semibold, kTitle);
+    dl->AddText(ImVec2(x, TextTop(mid)), U32(active ? p.accent : p.muted), "shelf");
+    x += ImGui::CalcTextSize("shelf").x + 18 * s;
+    ImGui::PopFont();
+
+    // Back, forward, up, refresh.
+    ImVec2 sq(ctrl, ctrl);
+    if (iconButton("##back", icon::Back, "Back (Alt+Left)", !back_.empty(), ImVec2(x, y0), sq)) Back();
+    x += ctrl + 2 * s;
+    if (iconButton("##fwd", icon::Forward, "Forward (Alt+Right)", !fwd_.empty(), ImVec2(x, y0), sq)) Forward();
+    x += ctrl + 2 * s;
+    if (iconButton("##up", icon::Up, "Up (Backspace)", !Parent(cur_).empty(), ImVec2(x, y0), sq)) up();
+    x += ctrl + 2 * s;
+    if (iconButton("##refresh", icon::Refresh, "Refresh (F5)", true, ImVec2(x, y0), sq)) refresh();
+    x += ctrl + 10 * s;
+
+    // From the right: window buttons, view, size, sort, filter.
+    float right = origin.x + W - windowButtons();
+    float gap = 8 * s;
+    float viewW = ctrl * 2 + 6 * s, sliderW = 96 * s, sortW = 150 * s, filterW = 220 * s;
+    float rx = right - 10 * s - viewW;
+    float viewX = rx;
+    float sliderX = 0, sortX = 0;
+    if (thumbView_) {
+        rx -= gap + sliderW;
+        sliderX = rx;
+        rx -= gap + sortW;
+        sortX = rx;
     }
-    std::string hint = std::string(icon::Search) + "  Filter";
-    if (ImGui::InputTextWithHint("##filter", hint.c_str(), filter_, sizeof filter_)) {
-        rebuild();
-        if (!view_.empty() && filter_[0]) focusOn(0, false);
+    rx -= gap + filterW;
+    float filterX = rx;
+    float crumbsW = std::max(filterX - gap - x, 120 * s);
+    drawCrumbs(ImVec2(x, y0), crumbsW, ctrl);
+
+    // Filter: the box with a magnifier drawn into its padding.
+    {
+        ImGui::SetCursorScreenPos(ImVec2(filterX, y0));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(32 * s, std::ceil((ctrl - ImGui::GetFontSize()) / 2)));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6 * s);
+        ImGui::SetNextItemWidth(filterW);
+        if (focusFilter_) {
+            ImGui::SetKeyboardFocusHere();
+            focusFilter_ = false;
+        }
+        if (ImGui::InputTextWithHint("##filter", "Filter", filter_, sizeof filter_)) {
+            rebuild();
+            if (!view_.empty() && filter_[0]) focusOn(0, false);
+        }
+        bool focused = ImGui::IsItemActive();
+        if (ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            filter_[0] = 0;
+            rebuild();
+        }
+        ImGui::PopStyleVar(2);
+        noDrag_.push_back({ImVec2(filterX, y0), ImVec2(filterX + filterW, y0 + ctrl)});
+        DrawCentred(dl, ImVec2(filterX + 17 * s, mid), icon::Search, U32(focused || filter_[0] ? p.text : p.muted));
     }
-    if (ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-        filter_[0] = 0;
-        rebuild();
-    }
-    ImGui::SameLine(0, 8 * s);
 
     if (thumbView_) {
-        ImGui::SetNextItemWidth(150 * s);
-        std::string label = std::string(icon::Sort) + "  " + sortName(sort_.key);
-        if (ImGui::BeginCombo("##sort", label.c_str(), ImGuiComboFlags_HeightLarge)) {
+        // Sort: a button that opens its menu.
+        ImGui::SetCursorScreenPos(ImVec2(sortX, y0));
+        if (ImGui::InvisibleButton("##sort", ImVec2(sortW, ctrl))) ImGui::OpenPopup("##sortmenu");
+        bool hov = ImGui::IsItemHovered();
+        noDrag_.push_back({ImVec2(sortX, y0), ImVec2(sortX + sortW, y0 + ctrl)});
+        dl->AddRectFilled(ImVec2(sortX, y0), ImVec2(sortX + sortW, y0 + ctrl), U32(hov ? p.border : p.surface2), 6 * s);
+        DrawCentred(dl, ImVec2(sortX + 17 * s, mid), icon::Sort, U32(p.muted));
+        std::string label = std::string(sortName(sort_.key)) + (sort_.descending ? "  \xE2\x86\x93" : "  \xE2\x86\x91");
+        dl->AddText(ImVec2(sortX + 32 * s, TextTop(mid)), U32(p.text), label.c_str());
+        ImGui::PushFont(nullptr, 10);
+        DrawCentred(dl, ImVec2(sortX + sortW - 15 * s, mid), icon::Down, U32(p.muted));
+        ImGui::PopFont();
+        ImGui::SetNextWindowPos(ImVec2(sortX, y0 + ctrl + 4 * s));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(sortW, 0), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6 * s, 6 * s));
+        if (ImGui::BeginPopup("##sortmenu")) {
             for (int k = 0; k < 5; k++)
-                if (ImGui::Selectable(sortName(SortKey(k)), int(sort_.key) == k)) SetSort(SortKey(k), sort_.descending);
+                if (ImGui::MenuItem(sortName(SortKey(k)), nullptr, int(sort_.key) == k)) SetSort(SortKey(k), sort_.descending);
             ImGui::Separator();
-            if (ImGui::Selectable("Ascending", !sort_.descending)) SetSort(sort_.key, false);
-            if (ImGui::Selectable("Descending", sort_.descending)) SetSort(sort_.key, true);
-            ImGui::EndCombo();
+            if (ImGui::MenuItem("Ascending", nullptr, !sort_.descending)) SetSort(sort_.key, false);
+            if (ImGui::MenuItem("Descending", nullptr, sort_.descending)) SetSort(sort_.key, true);
+            ImGui::EndPopup();
         }
-        ImGui::SameLine(0, 8 * s);
-        ImGui::SetNextItemWidth(100 * s);
-        ImGui::SliderFloat("##tile", &tile_, 72, 320, "");
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("Thumbnail size (Ctrl+scroll)");
-        ImGui::SameLine(0, 8 * s);
+        ImGui::PopStyleVar();
+
+        // Thumbnail size: a thin track and a round knob.
+        ImGui::SetCursorScreenPos(ImVec2(sliderX, y0));
+        ImGui::InvisibleButton("##tile", ImVec2(sliderW, ctrl));
+        bool sh = ImGui::IsItemHovered(), sa = ImGui::IsItemActive();
+        noDrag_.push_back({ImVec2(sliderX, y0), ImVec2(sliderX + sliderW, y0 + ctrl)});
+        float pad = 9 * s, t0 = sliderX + pad, t1 = sliderX + sliderW - pad;
+        if (sa) tile_ = std::clamp(72 + (ImGui::GetIO().MousePos.x - t0) / (t1 - t0) * (320 - 72), 72.0f, 320.0f);
+        float f = (tile_ - 72) / (320 - 72);
+        float kx = t0 + (t1 - t0) * f;
+        dl->AddRectFilled(ImVec2(t0, mid - 2 * s), ImVec2(t1, mid + 2 * s), U32(p.border), 2 * s);
+        dl->AddRectFilled(ImVec2(t0, mid - 2 * s), ImVec2(kx, mid + 2 * s), U32(p.accent, 0.7f), 2 * s);
+        dl->AddCircleFilled(ImVec2(kx, mid), (sh || sa ? 7.5f : 6.5f) * s, U32(sh || sa ? p.text : p.accent));
+        if (sh && !sa && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("Thumbnail size (Ctrl+scroll)");
     }
 
-    // View toggle: thumbnails or details.
-    auto seg = [&](const char* icon, const char* tip, bool on) {
-        ImGui::PushStyleColor(ImGuiCol_Button, on ? p.chip : p.surface2);
-        ImGui::PushStyleColor(ImGuiCol_Text, on ? p.text : p.muted);
-        bool hit = ImGui::Button(icon, ImVec2(bh, bh));
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("%s", tip);
-        return hit;
-    };
-    ImGui::SetCursorPosX(right - toggleW);
-    if (seg(icon::Grid, "Thumbnails (Ctrl+1)", thumbView_)) thumbView_ = true;
-    ImGui::SameLine(0, 2 * s);
-    if (seg(icon::List, "Details (Ctrl+2)", !thumbView_)) {
+    // View: one box, the chosen half lit.
+    dl->AddRectFilled(ImVec2(viewX, y0), ImVec2(viewX + viewW, y0 + ctrl), U32(p.surface2), 7 * s);
+    float inset = 3 * s, half = (viewW - inset * 2) / 2;
+    ImVec2 hs(half, ctrl - inset * 2);
+    if (iconButton("##thumbs", icon::Grid, "Thumbnails (Ctrl+1)", true, ImVec2(viewX + inset, y0 + inset), hs, thumbView_))
+        thumbView_ = true;
+    if (iconButton("##details", icon::List, "Details (Ctrl+2)", true, ImVec2(viewX + inset + half, y0 + inset), hs, !thumbView_)) {
         thumbView_ = false;
         sortApplied_ = false;
     }
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6 * s);
-    ImGui::GetWindowDrawList()->AddLine(ImVec2(0, ImGui::GetCursorScreenPos().y - 1),
-                                        ImVec2(ImGui::GetWindowWidth(), ImGui::GetCursorScreenPos().y - 1), U32(p.border));
-    ImGui::SetCursorPosX(0);
+
+    dl->AddLine(ImVec2(origin.x, origin.y + captionH_ - 0.5f), ImVec2(origin.x + W, origin.y + captionH_ - 0.5f), U32(p.border));
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + captionH_));
 }
 
-void App::drawCrumbs(float width) {
+// windowButtons draws minimise, maximise and close on the right of the
+// title bar, full height, and returns their width.
+float App::windowButtons() {
+    const Palette& p = Colours();
+    const ImGuiIO& io = ImGui::GetIO();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 origin = ImGui::GetWindowPos();
+    float w = std::round(46 * scale_), h = captionH_ - 1;
+    float x = origin.x + ImGui::GetWindowWidth() - 3 * w;
+    bool active = GetForegroundWindow() == hwnd_;
+    bool zoomed = IsZoomed(hwnd_);
+    const char* glyphs[] = {icon::Minimise, zoomed ? icon::Restore : icon::Maximise, icon::Close};
+    const char* tips[] = {"Minimise", zoomed ? "Restore down" : "Maximise", "Close"};
+    ImGui::PushFont(nullptr, 10);
+    for (int i = 0; i < 3; i++, x += w) {
+        ImVec2 a(x, origin.y), b(x + w, origin.y + h);
+        noDrag_.push_back({a, b});
+        bool hovered = io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y &&
+                       ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        auto inside = [&](ImVec2 m) { return m.x >= a.x && m.x < b.x && m.y >= a.y && m.y < b.y; };
+        bool held = hovered && io.MouseDown[0] && inside(io.MouseClickedPos[0]);
+        bool clicked = hovered && io.MouseReleased[0] && inside(io.MouseClickedPos[0]);
+        ImVec4 glyph = active ? p.text : p.muted;
+        if (i == 2 && hovered) {
+            dl->AddRectFilled(a, b, held ? IM_COL32(0xC4, 0x2B, 0x1C, 0xE6) : IM_COL32(0xC4, 0x2B, 0x1C, 0xFF));
+            glyph = ImVec4(1, 1, 1, 1);
+        } else if (hovered) {
+            dl->AddRectFilled(a, b, U32(ImVec4(1, 1, 1, held ? 0.12f : 0.07f)));
+            glyph = p.text;
+        }
+        DrawCentred(dl, ImVec2(x + w / 2, origin.y + h / 2), glyphs[i], U32(glyph));
+        if (hovered && !io.MouseDown[0] && ImGui::GetCurrentContext()->HoveredIdTimer > 0.6f) ImGui::SetTooltip("%s", tips[i]);
+        if (clicked) {
+            if (i == 0) ShowWindow(hwnd_, SW_MINIMIZE);
+            if (i == 1) ShowWindow(hwnd_, zoomed ? SW_RESTORE : SW_MAXIMIZE);
+            if (i == 2) PostMessageW(hwnd_, WM_CLOSE, 0, 0);
+        }
+    }
+    ImGui::PopFont();
+    return 3 * w;
+}
+
+void App::drawCrumbs(ImVec2 at, float width, float h) {
     const Palette& p = Colours();
     float s = scale_;
-    float h = ImGui::GetFrameHeight();
-    ImVec2 at = ImGui::GetCursorScreenPos();
+    noDrag_.push_back({at, ImVec2(at.x + width, at.y + h)});
+    float mid = at.y + h / 2;
     if (editingPath_) {
+        ImGui::SetCursorScreenPos(at);
         ImGui::SetNextItemWidth(width);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12 * s, std::ceil((h - ImGui::GetFontSize()) / 2)));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6 * s);
         if (focusPath_) {
             ImGui::SetKeyboardFocusHere();
             focusPath_ = false;
         }
         bool enter = ImGui::InputText("##path", pathBuf_, sizeof pathBuf_,
                                       ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+        bool deactivated = ImGui::IsItemDeactivated();
+        ImGui::PopStyleVar(2);
         if (enter) {
             editingPath_ = false;
-            std::wstring w = Widen(pathBuf_);
-            while (!w.empty() && w.back() == L' ') w.pop_back();
-            while (!w.empty() && w.front() == L' ') w.erase(w.begin());
-            if (!w.empty() && w[0] == L'/') {
-                // A Linux path: in the default distro (or the one we're in).
-                std::wstring distro = distros_.empty() ? L"" : distros_[0].name;
-                if (IsLinux(cur_)) {
-                    std::wstring root = Root(cur_);
-                    distro = root.substr(16, root.size() - 17);
-                }
-                w = FromLinux(w, distro);
-            } else if (!w.empty() && w[0] == L'~') {
-                w = HomeDir() + w.substr(1);
-            } else {
-                wchar_t buf[4096];
-                if (ExpandEnvironmentStringsW(w.c_str(), buf, ARRAYSIZE(buf))) w = buf;
-            }
-            w = Normalise(w);
-            if (IsDir(w)) Navigate(w);
-            else if (!w.empty() && GetFileAttributesW(w.c_str()) != INVALID_FILE_ATTRIBUTES) go(Parent(w), true, BaseName(w), -1);
-            else flash("Can't find " + std::string(pathBuf_), true);
-        } else if (ImGui::IsItemDeactivated()) {
+            goTo(pathBuf_);
+        } else if (deactivated) {
             editingPath_ = false;
         }
         return;
     }
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(at, ImVec2(at.x + width, at.y + h), U32(p.surface2), ImGui::GetStyle().FrameRounding);
+    dl->AddRectFilled(at, ImVec2(at.x + width, at.y + h), U32(p.surface2), 6 * s);
 
     auto crumbs = Crumbs(cur_);
     const char* sep = "\xE2\x80\xBA";  // ›
-    float sepW = ImGui::CalcTextSize(sep).x + 8 * s;
-    float pad = ImGui::GetStyle().FramePadding.x;
+    float sepW = 18 * s;
+    float pad = 8 * s;
     std::vector<std::string> labels;
     std::vector<float> widths;
     for (size_t i = 0; i < crumbs.size(); i++) {
         std::string l = Narrow(crumbs[i].label);
-        if (i == 0 && IsLinux(cur_)) l = std::string(icon::Linux) + " " + l;
         labels.push_back(l);
-        widths.push_back(ImGui::CalcTextSize(l.c_str()).x + pad * 2);
+        bool last = i + 1 == crumbs.size();
+        if (last) ImGui::PushFont(fonts_.semibold, 0);
+        float w = ImGui::CalcTextSize(l.c_str()).x + pad * 2;
+        if (last) ImGui::PopFont();
+        if (i == 0 && IsLinux(cur_)) w += 22 * s;  // the penguin's stand-in
+        widths.push_back(w);
     }
     // Fit from the end; the rest go behind "…".
-    float room = width - 40 * s;
+    float room = width - 50 * s;
     size_t first = crumbs.size();
     float used = 0;
     while (first > 0 && used + widths[first - 1] + sepW <= room) used += widths[--first] + sepW;
     if (first == crumbs.size() && !crumbs.empty()) first = crumbs.size() - 1;
 
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    ImGui::SetCursorScreenPos(ImVec2(at.x + 2 * s, at.y));
+    float x = at.x + 4 * s;
+    float ih = h - 6 * s, iy = at.y + 3 * s;
+    auto crumb = [&](const char* id, float w) {
+        ImGui::SetCursorScreenPos(ImVec2(x, iy));
+        bool hit = ImGui::InvisibleButton(id, ImVec2(w, ih));
+        if (ImGui::IsItemHovered()) dl->AddRectFilled(ImVec2(x, iy), ImVec2(x + w, iy + ih), U32(p.border), 4 * s);
+        return hit;
+    };
     if (first > 0) {
-        if (ImGui::Button("\xE2\x80\xA6", ImVec2(0, h))) ImGui::OpenPopup("##hiddencrumbs");
+        float w = 28 * s;
+        if (crumb("##more", w)) ImGui::OpenPopup("##hiddencrumbs");
+        DrawCentred(dl, ImVec2(x + w / 2, mid), "\xE2\x80\xA6", U32(p.muted));
+        x += w;
         if (ImGui::BeginPopup("##hiddencrumbs")) {
             for (size_t i = first; i-- > 0;)
                 if (ImGui::Selectable(labels[i].c_str())) Navigate(crumbs[i].path);
             ImGui::EndPopup();
         }
-        ImGui::SameLine();
     }
     for (size_t i = first; i < crumbs.size(); i++) {
         if (i > first || first > 0) {
-            ImGui::PushStyleColor(ImGuiCol_Text, p.muted);
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4 * s);
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(sep);
-            ImGui::PopStyleColor();
-            ImGui::SameLine(0, 4 * s);
+            DrawCentred(dl, ImVec2(x + sepW / 2, mid), sep, U32(p.muted));
+            x += sepW;
         }
         ImGui::PushID(int(i));
         bool last = i + 1 == crumbs.size();
+        if (crumb("##c", widths[i])) Navigate(crumbs[i].path);
+        float tx = x + pad;
+        if (i == 0 && IsLinux(cur_)) {
+            DrawCentred(dl, ImVec2(tx + 8 * s, mid), icon::Linux, U32(p.muted));
+            tx += 22 * s;
+        }
         if (last) ImGui::PushFont(fonts_.semibold, 0);
-        if (ImGui::Button(labels[i].c_str(), ImVec2(0, h))) Navigate(crumbs[i].path);
+        dl->AddText(ImVec2(tx, TextTop(mid)), U32(last ? p.text : p.muted), labels[i].c_str());
         if (last) ImGui::PopFont();
+        x += widths[i];
         ImGui::PopID();
-        ImGui::SameLine();
     }
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
     // The empty rest of the bar edits the path as text.
-    float restX = ImGui::GetCursorScreenPos().x;
-    float restW = at.x + width - restX;
+    float restW = at.x + width - x;
     if (restW > 4) {
+        ImGui::SetCursorScreenPos(ImVec2(x, at.y));
         if (ImGui::InvisibleButton("##editpath", ImVec2(restW, h))) {
             editingPath_ = focusPath_ = true;
             snprintf(pathBuf_, sizeof pathBuf_, "%s", Narrow(cur_).c_str());
         }
         if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
     }
-    ImGui::SetCursorScreenPos(ImVec2(at.x + width, at.y));
-    ImGui::Dummy(ImVec2(0, h));
+}
+
+void App::goTo(const std::string& typed) {
+    std::wstring w = Widen(typed);
+    while (!w.empty() && w.back() == L' ') w.pop_back();
+    while (!w.empty() && w.front() == L' ') w.erase(w.begin());
+    if (!w.empty() && w[0] == L'/') {
+        // A Linux path: in the distro we're in, else the default one.
+        std::wstring distro = distros_.empty() ? L"" : distros_[0].name;
+        if (IsLinux(cur_)) {
+            std::wstring root = Root(cur_);
+            distro = root.substr(16, root.size() - 17);
+        }
+        w = FromLinux(w, distro);
+    } else if (!w.empty() && w[0] == L'~') {
+        w = HomeDir() + w.substr(1);
+    } else {
+        wchar_t buf[4096];
+        if (ExpandEnvironmentStringsW(w.c_str(), buf, ARRAYSIZE(buf))) w = buf;
+    }
+    w = Normalise(w);
+    if (IsDir(w)) Navigate(w);
+    else if (!w.empty() && GetFileAttributesW(w.c_str()) != INVALID_FILE_ATTRIBUTES) go(Parent(w), true, BaseName(w), -1);
+    else flash("Can't find " + typed, true);
 }
 
 bool App::sideItem(const char* icon, const std::string& label, const std::wstring& path, const char* sub, float fill,
@@ -882,13 +1018,14 @@ bool App::sideItem(const char* icon, const std::string& label, const std::wstrin
     if (here || hovered)
         dl->AddRectFilled(a, ImVec2(a.x + w, a.y + h), U32(here ? p.accentLo : p.surface2), 6 * s);
     if (here) dl->AddRectFilled(ImVec2(a.x, a.y + 6 * s), ImVec2(a.x + 3 * s, a.y + h - 6 * s), U32(p.accent), 2 * s);
-    float x = a.x + 12 * s, y = a.y + 6 * s;
-    dl->AddText(ImVec2(x, y + 1 * s), U32(here ? p.accent : p.muted), icon);
+    float x = a.x + 12 * s;
+    float lineMid = sub ? a.y + 6 * s + lineH / 2 : a.y + h / 2;
+    DrawCentred(dl, ImVec2(x + 8 * s, lineMid), icon, U32(here ? p.accent : p.muted));
     float tx = x + 26 * s;
     std::string shown = ellipsis(label, a.x + w - tx - 8 * s);
-    dl->AddText(ImVec2(tx, y), U32(p.text), shown.c_str());
+    dl->AddText(ImVec2(tx, TextTop(lineMid)), U32(p.text), shown.c_str());
     if (sub) {
-        float by = y + lineH + 4 * s;
+        float by = a.y + 6 * s + lineH + 4 * s;
         if (fill >= 0) {
             float bw = a.x + w - tx - 12 * s;
             dl->AddRectFilled(ImVec2(tx, by), ImVec2(tx + bw, by + 4 * s), U32(p.border), 2 * s);
@@ -916,28 +1053,22 @@ void App::drawSidebar() {
         ImGui::PushFont(fonts_.semibold, kSmall);
         ImGui::PushStyleColor(ImGuiCol_Text, p.muted);
         ImGui::TextUnformatted(text);
+        float mid = TextTop(0) * -1 + ImGui::GetItemRectMin().y;  // where its capitals centre
         ImGui::PopStyleColor();
         ImGui::PopFont();
         ImGui::Dummy(ImVec2(0, 2 * s));
+        return mid;
     };
     ImGui::BeginChild("sideinner", ImVec2(width, 0), 0);
 
     // Pinned, with + to pin where we are.
-    float headY = ImGui::GetCursorPosY();
-    heading("PINNED");
+    float headMid = heading("PINNED");
     {
-        float bh = ImGui::GetTextLineHeight() + 4 * s;
+        // + sits level with the heading's letters.
+        float bh = std::round(24 * s);
         ImVec2 back = ImGui::GetCursorPos();
-        ImGui::SetCursorPos(ImVec2(width - bh - 4 * s, headY + 2 * s));
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-        ImGui::BeginDisabled(cur_.empty() || pinned(cur_));
-        if (ImGui::Button(icon::Add, ImVec2(bh, bh))) pin(cur_);
-        ImGui::EndDisabled();
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal))
-            ImGui::SetTooltip("Pin this folder (Ctrl+D)");
+        ImVec2 at(ImGui::GetWindowPos().x + width - bh - 6 * s, std::round(headMid - bh / 2));
+        if (iconButton("##pin", icon::Add, "Pin this folder (Ctrl+D)", !cur_.empty() && !pinned(cur_), at, ImVec2(bh, bh))) pin(cur_);
         ImGui::SetCursorPos(back);
     }
     int moveFrom = -1, moveTo = -1;
@@ -1429,13 +1560,15 @@ void App::drawStatus() {
     const Palette& p = Colours();
     float s = scale_;
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 a = ImGui::GetCursorScreenPos();
     float w = ImGui::GetWindowWidth();
-    float h = ImGui::GetTextLineHeight() + 12 * s;
+    float h = std::round(ImGui::GetTextLineHeight() + 12 * s);
+    // On the window's bottom edge, whatever spacing came before.
+    ImVec2 a(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y + ImGui::GetWindowHeight() - h);
+    ImGui::SetCursorScreenPos(a);
     dl->AddRectFilled(a, ImVec2(a.x + w, a.y + h), U32(p.surface));
     dl->AddLine(a, ImVec2(a.x + w, a.y), U32(p.border));
     ImGui::PushFont(nullptr, kSmall);
-    float y = a.y + (h - ImGui::GetTextLineHeight()) / 2;
+    float y = TextTop(a.y + h / 2);
 
     char buf[256];
     size_t total = 0;

@@ -18,6 +18,10 @@ struct Fonts {
 constexpr float kBody = 15, kSmall = 13, kTitle = 17;
 
 namespace icon {
+inline constexpr const char* Close = "\xEE\xA2\xBB";  // U+E8BB
+inline constexpr const char* Restore = "\xEE\xA4\xA3";  // U+E923
+inline constexpr const char* Maximise = "\xEE\xA4\xA2";  // U+E922
+inline constexpr const char* Minimise = "\xEE\xA4\xA1";  // U+E921
 inline constexpr const char* Back = "\xEE\x9C\xAB";  // U+E72B
 inline constexpr const char* Forward = "\xEE\x9C\xAA";  // U+E72A
 inline constexpr const char* Up = "\xEE\x9D\x8A";  // U+E74A
@@ -60,6 +64,15 @@ const Palette& Colours();
 Fonts LoadFonts();
 
 ImU32 U32(const ImVec4& c, float alpha = 1.0f);
+
+// InkBounds is the box the string's glyphs actually draw in (x0, y0, x1,
+// y1), relative to where it's drawn, at the current font and size.
+ImVec4 InkBounds(const char* s);
+// DrawCentred draws a string (an icon, usually) with its ink centred on
+// a point, whatever the font's line box does.
+void DrawCentred(ImDrawList* dl, ImVec2 centre, const char* s, ImU32 col);
+// TextTop gives the y to draw text at so its capitals centre on centreY.
+float TextTop(float centreY);
 ImVec4 Hex(unsigned rgb, float a = 1.0f);
 
 }  // namespace shelf

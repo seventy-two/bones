@@ -34,6 +34,8 @@ public:
     // Busy asks for a frame a second (loading, a message to clear).
     bool Busy() const { return loading_ || !message_.empty(); }
 
+    // InCaption says whether a point (client pixels) drags the window.
+    bool InCaption(float x, float y) const;
     void SetScale(float scale);
     void Save();
     // Placement reads the saved window position (false if none).
@@ -91,7 +93,10 @@ private:
 
     // Drawing.
     void drawToolbar();
-    void drawCrumbs(float width);
+    void drawCrumbs(ImVec2 at, float width, float height);
+    float windowButtons();
+    bool iconButton(const char* id, const char* icon, const char* tip, bool enabled, ImVec2 at, ImVec2 size, bool on = false);
+    void goTo(const std::string& typed);
     void drawSidebar();
     bool sideItem(const char* icon, const std::string& label, const std::wstring& path, const char* sub = nullptr,
                   float fill = -1, bool warn = false);
@@ -197,6 +202,9 @@ private:
     char renameBuf_[1024] = {};
     bool renameStart_ = false;
     int renameStem_ = 0;
+
+    float captionH_ = 46;
+    std::vector<std::pair<ImVec2, ImVec2>> noDrag_;  // the title bar's controls
 
     Later later_ = Later::None;
     bool openItemMenu_ = false, openFolderMenu_ = false, openPinMenu_ = false;
