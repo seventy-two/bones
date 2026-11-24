@@ -1191,9 +1191,76 @@ void App::drawSidebar() {
     }
 }
 
+void App::drawFolder(int vi, const Entry& e, ImVec2 p0, ImVec2 p1, int order, bool previews) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float s = scale_;
+    bool none = false;
+    std::vector<const Tex*> pics;
+    std::vector<std::pair<std::wstring, Entry>> kids;
+    if (previews) kids = thumbs_->WantFolder(pathOf(vi), e, order, none);
+    for (auto& [path, kid] : kids) {
+        bool failed = false;
+        const Tex* t = thumbs_->Want(path, kid, order, failed);
+        if (t && !t->icon) pics.push_back(t);
+    }
+    // A folder like Windows' own: the back with its tab, the pictures
+    // inside fanned out, then the front pocket over their lower half.
+    float bw = p1.x - p0.x;
+    // Small (a details row), it fills the box, centred.
+    float W = std::round(bw * (previews ? 0.86f : 0.95f)), H = std::round(W * (previews ? 0.76f : 0.8f));
+    float cx = (p0.x + p1.x) / 2, x0 = std::round(cx - W / 2), x1 = x0 + W;
+    float yb = previews ? p1.y : std::round((p0.y + p1.y + H) / 2), yt = yb - H;
+    float r = std::max(2.0f, W * 0.045f);
+    // Slate, in the app's colours, with an accent lip.
+    const ImU32 back = IM_COL32(0x26, 0x26, 0x36, 0xFF), front = IM_COL32(0x3A, 0x3A, 0x52, 0xFF);
+    const ImU32 frontLo = IM_COL32(0x2F, 0x2F, 0x44, 0xFF), lip = U32(Colours().accent, 0.75f);
+    dl->AddRectFilled(ImVec2(x0, yt), ImVec2(x0 + W * 0.40f, yt + H * 0.2f), back, r);
+    dl->AddRectFilled(ImVec2(x0, yt + H * 0.09f), ImVec2(x1, yb), back, r);
+
+    float frontTop = std::round(yt + (pics.empty() ? H * 0.22f : H * 0.50f));
+    if (!pics.empty()) {
+        // Up to three sheets, the first on top.
+        struct Place {
+            float dx, deg;
+        };
+        static const Place one[] = {{0, 0}};
+        static const Place two[] = {{-0.08f, -4}, {0.12f, 5}};
+        static const Place three[] = {{0, 0}, {-0.17f, -7}, {0.17f, 7}};
+        const Place* places = pics.size() == 1 ? one : pics.size() == 2 ? two : three;
+        int n = int(pics.size());
+        float boxW = W * (n == 1 ? 0.82f : 0.62f), boxH = H * 0.66f;
+        float border = std::max(1.5f, 2.5f * s);
+        for (int k = n - 1; k >= 0; k--) {
+            const Tex* t = pics[k];
+            float fit = std::min(boxW / t->width, boxH / t->height);
+            float hw = t->width * fit / 2, hh = t->height * fit / 2;
+            // Sit each sheet's bottom inside the pocket.
+            ImVec2 c(cx + places[k].dx * W, frontTop + H * 0.16f - hh);
+            float a = places[k].deg * 3.14159265f / 180, ca = std::cos(a), sa = std::sin(a);
+            auto corner = [&](float x, float y) { return ImVec2(c.x + x * ca - y * sa, c.y + x * sa + y * ca); };
+            float bx = hw + border, by = hh + border;
+            dl->AddQuadFilled(corner(-bx + 1, -by + 2), corner(bx + 1, -by + 2), corner(bx + 1, by + 2), corner(-bx + 1, by + 2),
+                              IM_COL32(0, 0, 0, 60));
+            dl->AddQuadFilled(corner(-bx, -by), corner(bx, -by), corner(bx, by), corner(-bx, by), IM_COL32(0xF4, 0xF4, 0xF6, 0xFF));
+            dl->AddImageQuad(t->ref(), corner(-hw, -hh), corner(hw, -hh), corner(hw, hh), corner(-hw, hh));
+        }
+        // The pocket's shadow on the sheets.
+        dl->AddRectFilledMultiColor(ImVec2(x0, frontTop - 5 * s), ImVec2(x1, frontTop), IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 0),
+                                    IM_COL32(0, 0, 0, 70), IM_COL32(0, 0, 0, 70));
+    }
+    dl->AddRectFilledMultiColor(ImVec2(x0, frontTop + r), ImVec2(x1, yb - r), front, front, frontLo, frontLo);
+    dl->AddRectFilled(ImVec2(x0, frontTop), ImVec2(x1, frontTop + r * 2), front, r, ImDrawFlags_RoundCornersTop);
+    dl->AddRectFilled(ImVec2(x0, yb - r * 2), ImVec2(x1, yb), frontLo, r, ImDrawFlags_RoundCornersBottom);
+    dl->AddLine(ImVec2(x0 + r, frontTop + 0.5f), ImVec2(x1 - r, frontTop + 0.5f), lip, W > 24 * s ? std::max(1.0f, s) : 1.0f);
+}
+
 void App::drawIcon(int vi, const Entry& e, ImVec2 p0, ImVec2 p1, bool big, int order) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float bw = p1.x - p0.x, bh = p1.y - p0.y;
+    if (e.dir) {
+        drawFolder(vi, e, p0, p1, order, big && bw > 40 * scale_);
+        return;
+    }
     bool failed = true;
     const Tex* t = nullptr;
     if (!e.dir && (big || OwnIcon(e.ext))) t = thumbs_->Want(pathOf(vi), e, order, failed);

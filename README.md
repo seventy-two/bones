@@ -41,6 +41,9 @@ Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
   up, click the path bar (or Ctrl+L) to type a path; a `/linux/path` opens
   in the default distro. Ctrl+F filters the folder (`*.jpg` works). Typing
   a name's start jumps to it.
+- Folders show what's in them: up to three of their pictures (or
+  videos) fanned out in the folder, pictures first, by name. They're drawn
+  in the app's slate colours rather than Windows' yellow.
 - The folder refreshes itself when its contents change.
 
 ## Building

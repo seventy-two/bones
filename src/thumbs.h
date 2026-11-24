@@ -72,6 +72,11 @@ public:
     // queues it (order: lower comes sooner within a frame). failed says
     // there isn't one (draw the icon).
     const Tex* Want(const std::wstring& path, const Entry& e, int order, bool& failed);
+    // WantFolder asks which files a folder's preview shows (up to three
+    // pictures or videos, pictures first, by name); their thumbnails then
+    // come from Want. Empty while it looks, or if there's nothing
+    // (none is then set).
+    std::vector<std::pair<std::wstring, Entry>> WantFolder(const std::wstring& path, const Entry& e, int order, bool& none);
     // Pump frees the least recently drawn when over budget; call once a
     // frame on the window's thread.
     void Pump();

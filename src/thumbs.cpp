@@ -434,6 +434,8 @@ void pruneCache(const std::wstring& dir) {
 struct Thumbs::Slot {
     std::wstring key, path, ext;
     bool shell = false, ownIcon = false, network = false;
+    bool folder = false;  // looks inside a folder for its preview
+    std::vector<std::pair<std::wstring, Entry>> kids;
     enum State { Queued, Working, Done, Failed } state = Queued;
     bool live = true;  // still in the map
     uint64_t lastWanted = 0;
@@ -511,6 +513,63 @@ const Tex* Thumbs::Want(const std::wstring& path, const Entry& e, int order, boo
     return nullptr;
 }
 
+std::vector<std::pair<std::wstring, Entry>> Thumbs::WantFolder(const std::wstring& path, const Entry& e, int order,
+                                                               bool& none) {
+    none = false;
+    wchar_t tail[32];
+    swprintf(tail, 32, L"|%llu", (unsigned long long)e.modified);  // changes when its contents do
+    std::wstring key = L"dir|" + Lower(path) + tail;
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it = slots_.find(key);
+    if (it != slots_.end()) {
+        Slot& s = *it->second;
+        s.lastWanted = frame_;
+        s.order = order;
+        if (s.state == Slot::Done) return s.kids;
+        if (s.state == Slot::Failed) none = true;
+        return {};
+    }
+    auto s = std::make_shared<Slot>();
+    s->key = key;
+    s->path = path;
+    s->folder = true;
+    s->lastWanted = frame_;
+    s->order = order;
+    slots_[key] = s;
+    queue_.push_back(s);
+    stats_.queued++;
+    cv_.notify_all();
+    return {};
+}
+
+// pickPreview chooses a folder's preview files: pictures first, then
+// videos and the like, each by name; hidden ones skipped.
+static std::vector<std::pair<std::wstring, Entry>> pickPreview(const std::wstring& dir) {
+    std::vector<Entry> all;
+    DWORD err = 0;
+    std::vector<std::pair<std::wstring, Entry>> out;
+    if (!ListDir(dir, all, err)) return out;
+    std::vector<const Entry*> images, others;
+    bool linux = IsLinux(dir);
+    for (const auto& e : all) {
+        if (e.dir || (e.attrs & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) || (linux && e.name[0] == L'.')) continue;
+        ThumbKind k = KindFor(e.ext);
+        if (k == ThumbKind::Image) images.push_back(&e);
+        else if (k == ThumbKind::Shell && !OwnIcon(e.ext) && e.ext != L".mp3" && e.ext != L".flac" && e.ext != L".m4a" &&
+                 e.ext != L".wma")
+            others.push_back(&e);
+    }
+    auto byName = [](const Entry* a, const Entry* b) { return NaturalCompare(a->name, b->name) < 0; };
+    std::sort(images.begin(), images.end(), byName);
+    std::sort(others.begin(), others.end(), byName);
+    for (auto* list : {&images, &others})
+        for (const Entry* e : *list) {
+            if (out.size() >= 3) break;
+            out.push_back({Join(dir, e->name), *e});
+        }
+    return out;
+}
+
 std::shared_ptr<Thumbs::Slot> Thumbs::next(bool shell) {
     std::unique_lock<std::mutex> lock(mu_);
     auto& q = shell ? shellQueue_ : queue_;
@@ -576,6 +635,19 @@ void Thumbs::imageWorker() {
     ComPtr<IWICImagingFactory> wic;
     CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic));
     while (auto s = next(false)) {
+        if (s->folder) {
+            auto kids = pickPreview(s->path);
+            {
+                std::lock_guard<std::mutex> lock(mu_);
+                stats_.working--;
+                if (s->live) {
+                    s->state = kids.empty() ? Slot::Failed : Slot::Done;
+                    s->kids = std::move(kids);
+                }
+            }
+            if (wake_) wake_();
+            continue;
+        }
         auto t0 = Clock::now();
         wchar_t name[32];
         uint64_t h = fnv1a(s->key);
@@ -653,7 +725,7 @@ void Thumbs::Pump() {
     if (bytes_ > kBudget) {
         std::vector<std::shared_ptr<Slot>> done;
         for (auto& [k, s] : slots_)
-            if (s->state == Slot::Done && s->lastWanted + 1 < frame_) done.push_back(s);
+            if (s->state == Slot::Done && s->tex && s->lastWanted + 1 < frame_) done.push_back(s);
         std::sort(done.begin(), done.end(), [](auto& a, auto& b) { return a->lastWanted < b->lastWanted; });
         for (auto& s : done) {
             if (bytes_ <= kBudget * 3 / 4) break;

@@ -108,6 +108,7 @@ private:
     void itemReleased(int vi);
     void drawName(int vi, float width, bool centred);
     void drawIcon(int vi, const Entry& e, ImVec2 p0, ImVec2 p1, bool big, int order);
+    void drawFolder(int vi, const Entry& e, ImVec2 p0, ImVec2 p1, int order, bool previews);
     void drawEmpty();
     void keys();
 
