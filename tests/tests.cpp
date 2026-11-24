@@ -170,6 +170,21 @@ static void testFormat() {
     CHECK(FormatSize(500ull << 30) == "500 GB");
 }
 
+static void testMediaHeavy() {
+    std::vector<Entry> es = {folder(L"a"), folder(L"b"), file(L"1.jpg"), file(L"2.png"), file(L"notes.txt")};
+    CHECK(!MediaHeavy(es));  // only two pictures
+    es.push_back(file(L"3.mp4"));
+    CHECK(MediaHeavy(es));  // three of four files
+    for (int i = 0; i < 4; i++) es.push_back(file(L"doc.txt"));
+    CHECK(!MediaHeavy(es));  // three of eight
+    for (int i = 0; i < 17; i++) es.push_back(file(L"x.webp"));
+    CHECK(MediaHeavy(es));  // twenty, among anything
+    std::vector<Entry> hiddenPics = {file(L".a.jpg"), file(L".b.jpg"), file(L".c.jpg"), file(L"z.txt")};
+    CHECK(!MediaHeavy(hiddenPics));
+    CHECK(!MediaHeavy({folder(L"only"), folder(L"folders")}));
+    CHECK(IsMedia(L".mkv") && IsMedia(L".jpeg") && !IsMedia(L".pdf") && !IsMedia(L".ico"));
+}
+
 static void testKinds() {
     CHECK(KindFor(L".jpg") == ThumbKind::Image);
     CHECK(KindFor(L".mp4") == ThumbKind::Shell);
@@ -187,6 +202,7 @@ int main() {
     testUnique();
     testFormat();
     testKinds();
+    testMediaHeavy();
     if (failures) {
         std::printf("%d failed\n", failures);
         return 1;

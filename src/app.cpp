@@ -129,6 +129,32 @@ void App::SetSort(SortKey key, bool descending) {
 
 void App::SelectName(const std::wstring& name) { arriveFocus_ = name; }
 
+void App::SetView(bool thumbs) {
+    forceView_ = true;  // a test run says which; leave it be
+    setView(thumbs, false);
+}
+
+void App::setView(bool thumbs, bool manual) {
+    if (!thumbs && thumbView_) sortApplied_ = false;
+    thumbView_ = thumbs;
+    if (!manual || cur_.empty()) return;
+    // Picked by hand here: it sticks for this folder.
+    std::wstring key = Lower(cur_);
+    if (!folderViews_.count(key)) folderViewOrder_.push_back(key);
+    folderViews_[key] = thumbs;
+    while (folderViewOrder_.size() > 500) {
+        folderViews_.erase(folderViewOrder_.front());
+        folderViewOrder_.erase(folderViewOrder_.begin());
+    }
+}
+
+void App::chooseView() {
+    if (forceView_ || cur_.empty()) return;
+    auto it = folderViews_.find(Lower(cur_));
+    if (it != folderViews_.end()) setView(it->second, false);
+    else if (autoView_) setView(MediaHeavy(entries_), false);
+}
+
 // ---- state ----
 
 void App::load() {
@@ -142,6 +168,15 @@ void App::load() {
     sort_.descending = j.value("sortDescending", false);
     sort_.foldersFirst = j.value("foldersFirst", true);
     showHidden_ = j.value("hidden", false);
+    autoView_ = j.value("autoView", true);
+    if (j.contains("folderViews") && j["folderViews"].is_array())
+        for (auto& v : j["folderViews"])
+            if (v.is_object()) {
+                std::wstring key = Lower(Widen(v.value("path", "")));
+                if (key.empty() || folderViews_.count(key)) continue;
+                folderViews_[key] = v.value("view", "") == "thumbs";
+                folderViewOrder_.push_back(key);
+            }
     if (j.contains("pins") && j["pins"].is_array()) {
         for (auto& p : j["pins"])
             if (p.is_object()) pins_.push_back({p.value("label", ""), Widen(p.value("path", ""))});
@@ -160,6 +195,10 @@ void App::Save() {
     j["sortDescending"] = sort_.descending;
     j["foldersFirst"] = sort_.foldersFirst;
     j["hidden"] = showHidden_;
+    j["autoView"] = autoView_;
+    j["folderViews"] = json::array();
+    for (auto& k : folderViewOrder_)
+        j["folderViews"].push_back({{"path", Narrow(k)}, {"view", folderViews_[k] ? "thumbs" : "details"}});
     j["pins"] = json::array();
     for (auto& p : pins_) j["pins"].push_back({{"label", p.label}, {"path", Narrow(p.path)}});
     WINDOWPLACEMENT wp{sizeof(wp)};
@@ -219,6 +258,7 @@ void App::go(std::wstring path, bool record, std::wstring focus, float scroll) {
         return;
     }
     watcher_.Watch(cur_);
+    chooseOnArrival_ = true;
     list(false);
 }
 
@@ -289,6 +329,10 @@ void App::took(Listing&& l) {
         else it = selected_.erase(it);
     }
     if (!renaming_.empty() && !byName_.count(Lower(renaming_))) renaming_.clear();
+    if (chooseOnArrival_) {
+        chooseOnArrival_ = false;
+        chooseView();
+    }
     rebuild();
     if (!focusName.empty()) focus_ = indexOf(focusName);
     if (!anchorName.empty()) anchor_ = indexOf(anchorName);
@@ -845,11 +889,9 @@ void App::drawToolbar() {
     float inset = 3 * s, half = (viewW - inset * 2) / 2;
     ImVec2 hs(half, ctrl - inset * 2);
     if (iconButton("##thumbs", icon::Grid, "Thumbnails (Ctrl+1)", true, ImVec2(viewX + inset, y0 + inset), hs, thumbView_))
-        thumbView_ = true;
-    if (iconButton("##details", icon::List, "Details (Ctrl+2)", true, ImVec2(viewX + inset + half, y0 + inset), hs, !thumbView_)) {
-        thumbView_ = false;
-        sortApplied_ = false;
-    }
+        setView(true, true);
+    if (iconButton("##details", icon::List, "Details (Ctrl+2)", true, ImVec2(viewX + inset + half, y0 + inset), hs, !thumbView_))
+        setView(false, true);
 
     dl->AddLine(ImVec2(origin.x, origin.y + captionH_ - 0.5f), ImVec2(origin.x + W, origin.y + captionH_ - 0.5f), U32(p.border));
     ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + captionH_));
@@ -1852,11 +1894,15 @@ void App::drawMenus() {
     }
     if (ImGui::BeginPopup("##folder")) {
         if (ImGui::BeginMenu("View")) {
-            if (ImGui::MenuItem("Thumbnails", "Ctrl+1", thumbView_)) thumbView_ = true;
-            if (ImGui::MenuItem("Details", "Ctrl+2", !thumbView_)) {
-                thumbView_ = false;
-                sortApplied_ = false;
+            if (ImGui::MenuItem("Thumbnails", "Ctrl+1", thumbView_)) setView(true, true);
+            if (ImGui::MenuItem("Details", "Ctrl+2", !thumbView_)) setView(false, true);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Choose by what's in the folder", nullptr, autoView_)) {
+                autoView_ = !autoView_;
+                Save();
             }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+                ImGui::SetTooltip("Thumbnails where it's mostly pictures and videos, else details.\nA view you pick in a folder sticks for that folder.");
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Sort by")) {
@@ -1928,11 +1974,8 @@ void App::keys() {
     if (ctrl && pressed(ImGuiKey_V)) paste(cur_);
     if (ctrl && shift && pressed(ImGuiKey_N)) newFolder();
     if (ctrl && pressed(ImGuiKey_D)) pin(cur_);
-    if (ctrl && pressed(ImGuiKey_1)) thumbView_ = true;
-    if (ctrl && pressed(ImGuiKey_2)) {
-        thumbView_ = false;
-        sortApplied_ = false;
-    }
+    if (ctrl && pressed(ImGuiKey_1)) setView(true, true);
+    if (ctrl && pressed(ImGuiKey_2)) setView(false, true);
     if (ctrl && pressed(ImGuiKey_H)) {
         showHidden_ = !showHidden_;
         rebuild();

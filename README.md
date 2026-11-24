@@ -12,7 +12,12 @@ Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
   right-click to move or unpin), every drive with its free space, and
   each WSL distro with its root and home (read from the registry, so a
   stopped distro isn't started until you click it).
-- **Thumbnails or details** (Ctrl+1 / Ctrl+2). "Folders first" (sort menu,
+- **Thumbnails or details** (Ctrl+1 / Ctrl+2), chosen per folder: a
+  folder that's mostly pictures and videos (at least 3 and half its files,
+  or 20 or more) opens as thumbnails, anything else as details. A view
+  picked by hand in a folder sticks for that folder (the last 500 are
+  kept). Right-click › View › "Choose by what's in the folder" turns the
+  automatic part off. "Folders first" (sort menu,
   or right-click empty space > Sort by) can be turned off to sort folders
   in with the files. Details sorts by name,
   date modified, date created, type or size from the headers; the

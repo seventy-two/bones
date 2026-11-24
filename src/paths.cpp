@@ -277,6 +277,24 @@ ThumbKind KindFor(const std::wstring& e) {
     return ThumbKind::Icon;
 }
 
+bool IsMedia(const std::wstring& e) {
+    static const std::unordered_set<std::wstring> video = {
+        L".mp4", L".m4v", L".mkv", L".webm", L".mov", L".avi", L".wmv", L".flv", L".ts", L".m2ts", L".mts",
+        L".mpg", L".mpeg", L".3gp", L".ogv",
+    };
+    return (KindFor(e) == ThumbKind::Image && e != L".ico" && e != L".dds") || video.count(e) > 0;
+}
+
+bool MediaHeavy(const std::vector<Entry>& entries) {
+    int files = 0, media = 0;
+    for (const auto& e : entries) {
+        if (e.dir || (e.attrs & 0x2 /* hidden */) || (!e.name.empty() && e.name[0] == L'.')) continue;
+        files++;
+        if (IsMedia(e.ext)) media++;
+    }
+    return media >= 20 || (media >= 3 && media * 2 >= files);
+}
+
 bool OwnIcon(const std::wstring& e) {
     return e == L".exe" || e == L".lnk" || e == L".url" || e == L".msi" || e == L".cur" || e == L".ani" ||
            e == L".scr" || e == L".ico";

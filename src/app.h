@@ -51,7 +51,7 @@ public:
     void DrivesChanged();
 
     // For test runs and screenshots.
-    void SetView(bool thumbs) { thumbView_ = thumbs; }
+    void SetView(bool thumbs);
     void SetSort(SortKey key, bool descending);
     void SelectName(const std::wstring& name);
 
@@ -77,6 +77,9 @@ private:
     void go(std::wstring path, bool record, std::wstring focus, float scroll);
     void list(bool quiet);
     void reindex();
+    // setView switches thumbnails/details; manual ones stick per folder.
+    void setView(bool thumbs, bool manual);
+    void chooseView();
     void took(Listing&& l);
     void rebuild();
     bool hidden(const Entry& e) const;
@@ -190,6 +193,11 @@ private:
     Sort sort_;
     bool sortApplied_ = false;  // the details table has been told the sort
     bool showHidden_ = false;
+    bool autoView_ = true;          // thumbnails where it's mostly media
+    bool forceView_ = false;        // a test run fixed the view
+    bool chooseOnArrival_ = false;  // pick the view when the listing lands
+    std::unordered_map<std::wstring, bool> folderViews_;  // picked by hand, by lower-case path
+    std::vector<std::wstring> folderViewOrder_;
     std::vector<Pin> pins_;
 
     // Sidebar data.

@@ -83,6 +83,13 @@ enum class ThumbKind {
     Shell,  // asked of the shell (videos, PDFs, programs' own icons…)
 };
 ThumbKind KindFor(const std::wstring& lowerExt);
+// IsMedia says whether a file type is a picture or a video.
+bool IsMedia(const std::wstring& lowerExt);
+// MediaHeavy says whether a folder is mostly pictures and videos, so it
+// opens as thumbnails: at least 3 of them and half its files, or 20 of
+// them however many other files there are. Hidden files don't count.
+bool MediaHeavy(const std::vector<Entry>& entries);
+
 // OwnIcon says whether files of this type each have their own icon
 // (programs, shortcuts), so the type's icon won't do.
 bool OwnIcon(const std::wstring& lowerExt);
