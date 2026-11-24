@@ -1255,7 +1255,7 @@ void App::drawHome() {
     float s = scale_;
     ImGui::BeginChild("home", ImVec2(0, 0), 0);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    float pad = 24 * s, gap = 10 * s;
+    float pad = 24 * s, gap = 10 * s, rowGap = 2 * s;
     float avail = ImGui::GetContentRegionAvail().x - pad * 2;
     int cols = std::max(1, int((avail + gap) / (300 * s + gap)));
     float cardW = std::min((avail - gap * (cols - 1)) / cols, 380 * s), cardH = std::round(50 * s);
@@ -1275,13 +1275,13 @@ void App::drawHome() {
     auto card = [&](int k, const char* id, const char* glyph, const std::string& label, const std::string& sub, float fill,
                     bool warn) {
         float x = origin.x + pad + (k % cols) * (cardW + gap);
-        float cy = y + (k / cols) * (cardH + gap);
+        float cy = y + (k / cols) * (cardH + rowGap);
         ImGui::SetCursorScreenPos(ImVec2(x, cy));
         bool hit = ImGui::InvisibleButton(id, ImVec2(cardW, cardH));
         bool hov = ImGui::IsItemHovered();
         ImVec2 a(x, cy), b(x + cardW, cy + cardH);
-        dl->AddRectFilled(a, b, U32(hov ? p.surface2 : p.surface), 7 * s);
-        dl->AddRect(a, b, U32(hov ? p.accent : p.border, hov ? 0.6f : 1.0f), 7 * s);
+        // No box at rest: just a soft highlight on hover, like the sidebar.
+        if (hov) dl->AddRectFilled(a, b, U32(p.surface2), 7 * s);
         ImGui::PushFont(nullptr, 20);
         DrawCentred(dl, ImVec2(x + 24 * s, cy + cardH / 2), glyph, U32(hov ? p.accent : p.muted));
         ImGui::PopFont();
@@ -1310,7 +1310,7 @@ void App::drawHome() {
         }
         return hit;
     };
-    auto sectionEnd = [&](int n) { y += ((n + cols - 1) / cols) * (cardH + gap) + 14 * s; };
+    auto sectionEnd = [&](int n) { y += ((n + cols - 1) / cols) * (cardH + rowGap) + 14 * s; };
 
     heading("Drives");
     for (int i = 0; i < int(drives_.size()); i++) {
