@@ -202,6 +202,7 @@ private:
     // Folders by use, for This PC's links under each drive. A visit counts
     // once you've stayed 2 s, so folders passed through on the way don't.
     std::vector<Use> uses_;
+    std::wstring homeSel_;                  // what's selected on This PC
     std::vector<std::wstring> hiddenUses_;  // hidden from those links by hand
     ULONGLONG arrivedAt_ = 0;
     bool visitCounted_ = true;

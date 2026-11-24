@@ -265,6 +265,7 @@ void App::go(std::wstring path, bool record, std::wstring focus, float scroll) {
         fwd_.clear();
     }
     cur_ = path;
+    homeSel_.clear();
     arriveFocus_ = std::move(focus);
     arriveScroll_ = scroll;
     filter_[0] = 0;
@@ -1299,19 +1300,28 @@ void App::drawHome() {
         y += ImGui::GetTextLineHeight() + 8 * s;
         ImGui::PopFont();
     };
-    // card draws one compact row at y and moves y on; true when clicked. With a fill (a drive), the name and free space share
+    // Like the folder view, a click selects and a double-click opens.
+    auto pick = [&](const std::wstring& path, ImVec2 a, ImVec2 b, float r) {
+        bool hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked(0) || ImGui::IsItemClicked(1)) homeSel_ = path;
+        bool sel = SamePath(homeSel_, path);
+        if (sel || hov) dl->AddRectFilled(a, b, U32(sel ? p.accentLo : p.surface2), r);
+        return hov && ImGui::IsMouseDoubleClicked(0);
+    };
+    // card draws one compact row at y and moves y on; true when
+    // double-clicked. With a fill (a drive), the name and free space share
     // the top line and a thin bar sits under them; without, the sub line
     // goes under the name.
-    auto card = [&](const char* id, const char* glyph, const std::string& label, const std::string& sub, float fill,
+    auto card = [&](const char* id, const std::wstring& path, const char* glyph, const std::string& label, const std::string& sub, float fill,
                     bool warn) {
         float x = origin.x + pad, cy = y;
         y += cardH + rowGap;
         ImGui::SetCursorScreenPos(ImVec2(x, cy));
-        bool hit = ImGui::InvisibleButton(id, ImVec2(cardW, cardH));
+        ImGui::InvisibleButton(id, ImVec2(cardW, cardH));
         bool hov = ImGui::IsItemHovered();
         ImVec2 a(x, cy), b(x + cardW, cy + cardH);
-        // No box at rest: just a soft highlight on hover, like the sidebar.
-        if (hov) dl->AddRectFilled(a, b, U32(p.surface2), 7 * s);
+        // No box at rest: a highlight on hover, and when selected.
+        bool hit = pick(path, a, b, 7 * s);
         ImGui::PushFont(nullptr, 20);
         DrawCentred(dl, ImVec2(x + 24 * s, cy + cardH / 2), glyph, U32(hov ? p.accent : p.muted));
         ImGui::PopFont();
@@ -1353,9 +1363,9 @@ void App::drawHome() {
             shown++;
             ImGui::PushID(Narrow(u.path).c_str());
             ImGui::SetCursorScreenPos(ImVec2(x, y));
-            bool hit = ImGui::InvisibleButton("##use", ImVec2(w, h));
+            ImGui::InvisibleButton("##use", ImVec2(w, h));
             bool hov = ImGui::IsItemHovered();
-            if (hov) dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), U32(p.surface2), 5 * s);
+            bool hit = pick(u.path, ImVec2(x, y), ImVec2(x + w, y + h), 5 * s);
             float mid = y + h / 2;
             ImGui::PushFont(nullptr, 14);
             DrawCentred(dl, ImVec2(x + 12 * s, mid), icon::Folder, U32(hov ? p.accent : p.muted));
@@ -1413,7 +1423,7 @@ void App::drawHome() {
         std::string sub = d.total ? FormatSize(d.free) + " free of " + FormatSize(d.total) : "Not ready";
         float fill = d.total ? 1.0f - float(double(d.free) / double(d.total)) : -1;
         ImGui::PushID(i);
-        if (card("##drive", driveIcon(d.type), d.label, sub, fill, d.total && d.free < d.total / 10)) Navigate(d.root);
+        if (card("##drive", d.root, driveIcon(d.type), d.label, sub, fill, d.total && d.free < d.total / 10)) Navigate(d.root);
         if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##drivemenu");
         if (ImGui::BeginPopup("##drivemenu")) {
             if (ImGui::MenuItem("Open")) Navigate(d.root);
@@ -1440,7 +1450,7 @@ void App::drawHome() {
             ImGui::PushID(int(100 + i));
             std::string home = d.uid == 0 ? "/root" : "your home";
             std::wstring root = FromLinux(L"/", d.name), homePath = d.uid == 0 ? FromLinux(L"/root", d.name) : L"";
-            if (card("##home", icon::Home, Narrow(d.name), home, -1, false)) Navigate(DistroHome(d));
+            if (card("##home", homePath.empty() ? root : homePath, icon::Home, Narrow(d.name), home, -1, false)) Navigate(DistroHome(d));
             if (ImGui::IsItemClicked(1)) ImGui::OpenPopup("##distromenu");
             if (ImGui::BeginPopup("##distromenu")) {
                 if (ImGui::MenuItem("Open")) Navigate(DistroHome(d));
@@ -1452,6 +1462,10 @@ void App::drawHome() {
             ImGui::PopID();
         }
     }
+    // A click on empty space clears the selection.
+    if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() &&
+        (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1)))
+        homeSel_.clear();
     ImGui::SetCursorScreenPos(ImVec2(origin.x, y));
     ImGui::Dummy(ImVec2(1, 1));
     ImGui::EndChild();
@@ -2074,6 +2088,10 @@ void App::keys() {
     int n = int(view_.size());
     bool ctrl = io.KeyCtrl, shift = io.KeyShift, alt = io.KeyAlt;
     if (pressed(ImGuiKey_Backspace)) up();
+    if (cur_.empty()) {  // This PC: Enter opens what's selected there
+        if (!homeSel_.empty() && (pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter))) Navigate(homeSel_);
+        return;
+    }
     if (pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter)) {
         if (alt) Properties(hwnd_, selectedPaths().empty() ? std::vector<std::wstring>{cur_} : selectedPaths());
         else openSelection();

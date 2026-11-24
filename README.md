@@ -6,7 +6,8 @@ Explorer's ribbon, Home page, gallery, OneDrive or network clutter.
 
 - **This PC** is where it opens (unless given a folder): a list of the
   drives with their free space and the default WSL distro's home, each
-  with its three most used folders under it. A visit counts once you've
+  with its three most used folders under it. Like a folder, a click
+  selects and a double-click (or Enter) opens. A visit counts once you've
   stayed 2 seconds (so folders you click through don't), and old visits
   fade by half every two weeks. Right-click a folder there to hide it
   (it's no longer counted); a drive's right-click menu shows hidden ones
