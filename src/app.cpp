@@ -1351,7 +1351,7 @@ void App::drawHome() {
         return hit;
     };
     // links draws the most used folders under root (but not skip), indented
-    // under the row above: name, then where it is, muted. Right-click to
+    // under the row above: name, then its full path, muted. Right-click to
     // hide one.
     auto links = [&](const std::wstring& root, const std::wstring& skip) {
         auto top = TopUses(uses_, root, 4, int64_t(time(nullptr)));
@@ -1372,8 +1372,8 @@ void App::drawHome() {
             ImGui::PopFont();
             float tx = x + 26 * s, tw = w - 26 * s - 8 * s;
             std::string name = Narrow(BaseName(u.path));
-            std::wstring parent = Parent(u.path);
-            std::string where = IsLinux(u.path) ? Narrow(ToLinux(parent)) : Narrow(parent);
+            // The full path, in Linux form for a distro's folders.
+            std::string where = IsLinux(u.path) ? Narrow(ToLinux(u.path)) : Narrow(u.path);
             ImGui::PushFont(nullptr, 0);
             std::string shownName = ellipsis(name, tw);
             float nw = ImGui::CalcTextSize(shownName.c_str()).x;
