@@ -569,7 +569,8 @@ void App::finishRename(bool keep) {
     while (!to.empty() && (to.back() == L' ' || to.back() == L'.')) to.pop_back();
     while (!to.empty() && to.front() == L' ') to.erase(to.begin());
     if (!keep || to.empty() || to == from) return;
-    std::string err = Rename(Join(cur_, from), Join(cur_, to));
+    std::string err = to.find(L'\\') != std::wstring::npos ? "A name can't have any of \\ / : * ? \" < > |"
+                                                            : Rename(Join(cur_, from), Join(cur_, to));
     if (!err.empty()) {
         flash("Couldn't rename: " + err, true);
         return;

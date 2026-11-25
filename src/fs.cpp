@@ -501,7 +501,10 @@ void CopyOrMove(HWND owner, const std::vector<std::wstring>& paths, const std::w
 
 std::string Rename(const std::wstring& from, const std::wstring& to) {
     if (from == to) return "";
-    if (to.find_first_of(L"\\/:*?\"<>|") != std::wstring::npos && !IsLinux(from))
+    // Only the new name is checked: the folder part has \ and : of its own.
+    size_t slash = to.find_last_of(L'\\');
+    std::wstring name = slash == std::wstring::npos ? to : to.substr(slash + 1);
+    if (name.find_first_of(L"/:*?\"<>|") != std::wstring::npos && !IsLinux(from))
         return "A name can't have any of \\ / : * ? \" < > |";
     if (!MoveFileExW(longPath(from).c_str(), longPath(to).c_str(), 0)) return ErrorText(GetLastError());
     return "";
